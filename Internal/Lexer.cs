@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 
@@ -113,10 +114,10 @@ namespace DialogLang
 
             if (result.ToString().Contains("."))
             {
-                return new Token(TokenType.Number, startLine, startColumn, float.Parse(result.ToString()));
+                return new Token(TokenType.Number, startLine, startColumn, float.Parse(result.ToString(), CultureInfo.InvariantCulture));
             }
             
-            return new Token(TokenType.Number, startLine, startColumn, int.Parse(result.ToString()));
+            return new Token(TokenType.Number, startLine, startColumn, int.Parse(result.ToString(), CultureInfo.InvariantCulture));
         }
 
         /// <summary>
