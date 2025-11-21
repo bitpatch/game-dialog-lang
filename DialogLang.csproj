@@ -12,4 +12,8 @@
     <InternalsVisibleTo Include="DialogLang.Tests" />
   </ItemGroup>
 
+  <PropertyGroup Condition="'$(Configuration)'=='Homebrew'">
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
 </Project>
