@@ -52,7 +52,7 @@ namespace BitPatch.DialogLang
         /// <returns>Enumerable of output values.</returns>
         public IEnumerable<object> Execute(string source)
         {
-            if (string.IsNullOrEmpty(source))
+            if (source is null)
             {
                 throw new ArgumentNullException(nameof(source));
             }
