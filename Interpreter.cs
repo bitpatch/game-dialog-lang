@@ -515,9 +515,7 @@ namespace BitPatch.DialogLang
             return (left, right) switch
             {
                 (Integer l, Integer r) => l.Value == r.Value,
-                (Float l, Float r) => Math.Abs(l.Value - r.Value) < float.Epsilon,
-                (Integer l, Float r) => Math.Abs(l.Value - r.Value) < float.Epsilon,
-                (Float l, Integer r) => Math.Abs(l.Value - r.Value) < float.Epsilon,
+                (Number l, Number r) => Math.Abs(l.FloatValue - r.FloatValue) < float.Epsilon,
                 (String l, String r) => l.Value == r.Value,
                 (Boolean l, Boolean r) => l.Value == r.Value,
                 _ => false
