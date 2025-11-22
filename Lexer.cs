@@ -74,6 +74,11 @@ namespace BitPatch.DialogLang
                 {
                     var (tokenType, count) = ReadIndentation();
 
+                    if (!_current.IsChar())
+                    {
+                        break;
+                    }
+
                     var identToken = tokenType switch
                     {
                         TokenType.Indent => Token.Indent(_line, _column),
@@ -90,16 +95,13 @@ namespace BitPatch.DialogLang
                 }
 
                 SkipEmptyChars();
-
-                if (!_current.IsChar())
-                {
-                    break;
-                }
-
                 yield return ReadFromCharacter((char)_current);
             }
 
-            yield return Token.NewLine(_line, _column);
+            if (!_atLineStart)
+            {
+                yield return Token.NewLine(_line, _column);
+            }
 
             // Generate Dedent tokens for all remaining indentation levels.
             while (_indents.Count > 1)
