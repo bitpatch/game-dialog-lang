@@ -39,7 +39,7 @@ namespace BitPatch.DialogLang
         {
             if (expression is not Ast.IBoolean)
             {
-                throw new InvalidSyntaxException("Expression cannot be boolean", expression.Location);
+                throw new SyntaxError("Expression cannot be boolean", expression.Location);
             }
 
             return expression;

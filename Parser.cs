@@ -47,7 +47,7 @@ namespace BitPatch.DialogLang
                 TokenType.Indent => ParseBlock(),
                 TokenType.While => ParseWhile(),
                 TokenType.If => ParseIf(),
-                _ => throw new InvalidSyntaxException(_current.Location)
+                _ => throw new SyntaxError(_current.Location)
             };
         }
 
@@ -56,7 +56,7 @@ namespace BitPatch.DialogLang
             return _next.Type switch
             {
                 TokenType.Assign => ParseAssignment(),
-                _ => throw new InvalidSyntaxException(_current.Location)
+                _ => throw new SyntaxError(_current.Location)
             };
         }
 
@@ -120,12 +120,12 @@ namespace BitPatch.DialogLang
             Consume(TokenType.While); // consume 'while'
             var condition = ParseExpression();
 
-            Consume(TokenType.Newline); // expect newline after condition
+            var newLine = Consume(TokenType.Newline); // expect newline after condition
 
-            // Expect an indented block (body cannot be empty)
+            // Expect an indented block (body cannot be empty).
             if (_current.Type is not TokenType.Indent)
             {
-                throw new InvalidSyntaxException("While loop has no body", condition.Location.After());
+                throw new SyntaxError("While loop has no body", newLine.Location);
             }
 
             var body = ParseBlock();
@@ -137,7 +137,7 @@ namespace BitPatch.DialogLang
         /// Parses an if-else statement with optional else if branches.
         /// </summary>
         /// <returns>The parsed if statement.</returns>
-        /// <exception cref="InvalidSyntaxException">Thrown when then/else blocks are missing.</exception>
+        /// <exception cref="SyntaxError">Thrown when then/else blocks are missing.</exception>
         private Ast.If ParseIf()
         {
             var startLocation = _current.Location;
@@ -160,13 +160,13 @@ namespace BitPatch.DialogLang
             if (_current.Type is TokenType.Else)
             {
                 var elseLocation = _current.Location;
-                Consume(TokenType.Else); // consume 'else'
-                Consume(TokenType.Newline); // expect newline after 'else'
+                Consume(TokenType.Else);                  // consume 'else'
+                var newLine = Consume(TokenType.Newline); // expect newline after 'else'
 
                 // Expect an indented block (else block cannot be empty).
                 if (_current.Type is not TokenType.Indent)
                 {
-                    throw new InvalidSyntaxException("Else clause has no body", elseLocation.After());
+                    throw new SyntaxError("Else clause has no body", newLine.Location);
                 }
 
                 elseBlock = ParseBlock();
@@ -179,17 +179,17 @@ namespace BitPatch.DialogLang
         /// Parses a conditional block (condition + then block).
         /// </summary>
         /// <returns>The parsed conditional block.</returns>
-        /// <exception cref="InvalidSyntaxException">Thrown when the then block is missing.</exception>
+        /// <exception cref="SyntaxError">Thrown when the then block is missing.</exception>
         private Ast.ConditionalBlock ParseConditionalBlock()
         {
             var startLocation = _current.Location;
             var condition = ParseExpression();
-            Consume(TokenType.Newline); // expect newline after condition
+            var newLine = Consume(TokenType.Newline); // expect newline after condition
 
             // Expect an indented block (then block cannot be empty).
             if (_current.Type is not TokenType.Indent)
             {
-                throw new InvalidSyntaxException("If statement has no body", condition.Location.After());
+                throw new SyntaxError("Has no block code", newLine.Location);
             }
 
             var thenBlock = ParseBlock();
@@ -394,7 +394,7 @@ namespace BitPatch.DialogLang
                 TokenType.False => new Ast.Boolean(false, token.Location),
                 TokenType.Identifier => new Ast.Variable(token.Value, token.Location),
                 TokenType.LeftParen => ParseParenthesizedExpression(),
-                _ => throw new InvalidSyntaxException(token.Location)
+                _ => throw new SyntaxError(token.Location)
             };
         }
 
@@ -407,7 +407,7 @@ namespace BitPatch.DialogLang
 
             if (_current.Type is not TokenType.RightParen)
             {
-                throw new InvalidSyntaxException(_current.Location);
+                throw new SyntaxError(_current.Location);
             }
 
             MoveNext(); // consume ')'
@@ -424,18 +424,22 @@ namespace BitPatch.DialogLang
         }
 
         /// <summary>
-        /// Consumes a token of the expected type and moves to the next token
+        /// Consumes a token of the expected type and moves to the next token.
         /// </summary>
-        /// <param name="expectedType">The expected token type</param>
-        /// <exception cref="InvalidSyntaxException">Thrown when current token doesn't match expected type</exception>
-        private void Consume(TokenType expectedType)
+        /// <param name="expectedType">The expected token type.</param>
+        /// <returns>The consumed token.</returns>
+        /// <exception cref="SyntaxError">Thrown when current token doesn't match expected type</exception>
+        private Token Consume(TokenType expectedType)
         {
             if (_current.Type != expectedType)
             {
-                throw new InvalidSyntaxException(_current.Location);
+                throw new SyntaxError(_current.Location);
             }
 
+            var token = _current;
             MoveNext();
+
+            return token;
         }
     }
 }

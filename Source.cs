@@ -102,7 +102,7 @@ namespace BitPatch.DialogLang
             {
                 SourceType.None => "Empty",
                 SourceType.Inline => "Inline",
-                SourceType.File => $"File ({_value})",
+                SourceType.File => $"File \"{_value}\"",
                 _ => "<unknown source>",
             };
         }

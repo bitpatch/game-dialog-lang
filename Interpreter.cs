@@ -157,7 +157,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="andOp">The AND operation node.</param>
         /// <returns>The evaluated Boolean result.</returns>
-        /// <exception cref="ScriptException">Thrown when the operands are not Boolean values.</exception>
+        /// <exception cref="RuntimeError">Thrown when the operands are not Boolean values.</exception>
         private Boolean EvaluateAndOp(Ast.AndOp andOp)
         {
             var left = EvaluateExpression(andOp.Left);
@@ -173,9 +173,9 @@ namespace BitPatch.DialogLang
 
             return new Boolean(value);
 
-            ScriptException Exception(Location location)
+            RuntimeError Exception(Location location)
             {
-                return new ScriptException($"Cannot evaluate AND operation with types {left.GetType().Name} and {right.GetType().Name}", location);
+                return new RuntimeError($"Cannot evaluate AND operation with types {left.GetType().Name} and {right.GetType().Name}", location);
             }
         }
 
@@ -184,7 +184,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="orOp">The OR operation node.</param>
         /// <returns>The evaluated Boolean result.</returns>
-        /// <exception cref="ScriptException">Thrown when the operands are not Boolean values.</exception>
+        /// <exception cref="RuntimeError">Thrown when the operands are not Boolean values.</exception>
         private Boolean EvaluateOrOp(Ast.OrOp orOp)
         {
             var left = EvaluateExpression(orOp.Left);
@@ -200,9 +200,9 @@ namespace BitPatch.DialogLang
 
             return new Boolean(value);
 
-            ScriptException Exception(Location location)
+            RuntimeError Exception(Location location)
             {
-                return new ScriptException($"Cannot evaluate OR operation with types {left.GetType().Name} and {right.GetType().Name}", location);
+                return new RuntimeError($"Cannot evaluate OR operation with types {left.GetType().Name} and {right.GetType().Name}", location);
             }
         }
 
@@ -211,7 +211,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="xorOp">The XOR operation node.</param>
         /// <returns>The evaluated Boolean result.</returns>
-        /// <exception cref="ScriptException">Thrown when the operands are not Boolean values.</exception>
+        /// <exception cref="RuntimeError">Thrown when the operands are not Boolean values.</exception>
         private Boolean EvaluateXorOp(Ast.XorOp xorOp)
         {
             var left = EvaluateExpression(xorOp.Left);
@@ -227,9 +227,9 @@ namespace BitPatch.DialogLang
 
             return new Boolean(value);
 
-            ScriptException Exception(Location location)
+            RuntimeError Exception(Location location)
             {
-                return new ScriptException($"Cannot evaluate XOR operation with types {left.GetType().Name} and {right.GetType().Name}", location);
+                return new RuntimeError($"Cannot evaluate XOR operation with types {left.GetType().Name} and {right.GetType().Name}", location);
             }
         }
 
@@ -238,14 +238,14 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="notOp">The NOT operation node.</param>
         /// <returns>The evaluated Boolean result.</returns>
-        /// <exception cref="ScriptException">Thrown when the operand is not a Boolean value.</exception>
+        /// <exception cref="RuntimeError">Thrown when the operand is not a Boolean value.</exception>
         private Boolean EvaluateNotOp(Ast.NotOp notOp)
         {
             var operand = EvaluateExpression(notOp.Operand);
 
             if (operand is not Boolean boolOperand)
             {
-                throw new ScriptException($"Cannot evaluate NOT operation on type {operand.GetType().Name}", notOp.Operand.Location);
+                throw new RuntimeError($"Cannot evaluate NOT operation on type {operand.GetType().Name}", notOp.Operand.Location);
             }
 
             return new Boolean(!boolOperand.Value);
@@ -324,7 +324,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="op">The addition operation node.</param>
         /// <returns>The evaluated runtime item.</returns>
-        /// <exception cref="ScriptException">Thrown when the values cannot be added.</exception>
+        /// <exception cref="RuntimeError">Thrown when the values cannot be added.</exception>
         private RuntimeItem EvaluateAddOp(Ast.AddOp op)
         {
             var left = EvaluateExpression(op.Left);
@@ -346,9 +346,9 @@ namespace BitPatch.DialogLang
                 _ => throw Exception(op.Left.Location | op.Right.Location)
             };
 
-            ScriptException Exception(Location location)
+            RuntimeError Exception(Location location)
             {
-                return new ScriptException($"Cannot add {left.GetType().Name} and {right.GetType().Name}", location);
+                return new RuntimeError($"Cannot add {left.GetType().Name} and {right.GetType().Name}", location);
             }
         }
 
@@ -357,7 +357,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="op">The subtraction operation node.</param>
         /// <returns>The evaluated numeric value.</returns>
-        /// <exception cref="ScriptException">Thrown when the values cannot be subtracted.</exception>
+        /// <exception cref="RuntimeError">Thrown when the values cannot be subtracted.</exception>
         private Number EvaluateSubOp(Ast.SubOp op)
         {
             var left = EvaluateExpression(op.Left);
@@ -372,9 +372,9 @@ namespace BitPatch.DialogLang
                 _ => throw Exception(op.Left.Location | op.Right.Location)
             };
 
-            ScriptException Exception(Location location)
+            RuntimeError Exception(Location location)
             {
-                return new ScriptException($"Cannot subtract {right.GetType().Name} from {left.GetType().Name}", location);
+                return new RuntimeError($"Cannot subtract {right.GetType().Name} from {left.GetType().Name}", location);
             }
         }
 
@@ -383,7 +383,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="op">The multiplication operation node.</param>
         /// <returns>The evaluated numeric value.</returns>
-        /// <exception cref="ScriptException">Thrown when the values cannot be multiplied.</exception>
+        /// <exception cref="RuntimeError">Thrown when the values cannot be multiplied.</exception>
         private Number EvaluateMulOp(Ast.MulOp op)
         {
             var left = EvaluateExpression(op.Left);
@@ -398,9 +398,9 @@ namespace BitPatch.DialogLang
                 _ => throw Exception(op.Left.Location | op.Right.Location)
             };
 
-            ScriptException Exception(Location location)
+            RuntimeError Exception(Location location)
             {
-                return new ScriptException($"Cannot multiply {left.GetType().Name} by {right.GetType().Name}", location);
+                return new RuntimeError($"Cannot multiply {left.GetType().Name} by {right.GetType().Name}", location);
             }
         }
 
@@ -409,7 +409,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="op">The division operation node.</param>
         /// <returns>The evaluated numeric value.</returns>
-        /// <exception cref="ScriptException">Thrown when the values cannot be divided.</exception>
+        /// <exception cref="RuntimeError">Thrown when the values cannot be divided.</exception>
         private Number EvaluateDivOp(Ast.DivOp op)
         {
             var left = EvaluateExpression(op.Left);
@@ -418,16 +418,16 @@ namespace BitPatch.DialogLang
             // Division always returns float to handle cases like 5 / 2 = 2.5.
             return (left, right) switch
             {
-                (_, Number n) when n.IsNil => throw new ScriptException("Division by zero", op.Right.Location),
+                (_, Number n) when n.IsNil => throw new RuntimeError("Division by zero", op.Right.Location),
                 (Number l, Number r) when !r.IsNil => new Float(l.FloatValue / r.FloatValue),
                 (Number, not Number) => throw Exception(op.Right.Location),
                 (not Number, Number) => throw Exception(op.Left.Location),
                 _ => throw Exception(op.Left.Location | op.Right.Location)
             };
 
-            ScriptException Exception(Location location)
+            RuntimeError Exception(Location location)
             {
-                return new ScriptException($"Cannot divide {left.GetType().Name} by {right.GetType().Name}", location);
+                return new RuntimeError($"Cannot divide {left.GetType().Name} by {right.GetType().Name}", location);
             }
         }
 
@@ -436,7 +436,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="op">The modulo operation node.</param>
         /// <returns>The evaluated numeric value.</returns>
-        /// <exception cref="ScriptException">Thrown when the values cannot be used for modulo operation.</exception>
+        /// <exception cref="RuntimeError">Thrown when the values cannot be used for modulo operation.</exception>
         private Number EvaluateModOp(Ast.ModOp op)
         {
             var left = EvaluateExpression(op.Left);
@@ -444,7 +444,7 @@ namespace BitPatch.DialogLang
 
             return (left, right) switch
             {
-                (_, Number n) when n.IsNil => throw new ScriptException("Division by zero", op.Right.Location),
+                (_, Number n) when n.IsNil => throw new RuntimeError("Division by zero", op.Right.Location),
                 (Integer l, Integer r) when r.Value != 0 => new Integer(l.Value % r.Value),
                 (Number l, Number r) when !r.IsNil => new Float(l.FloatValue % r.FloatValue),
                 (Number, not Number) => throw Exception(op.Right.Location),
@@ -452,9 +452,9 @@ namespace BitPatch.DialogLang
                 _ => throw Exception(op.Left.Location | op.Right.Location)
             };
 
-            ScriptException Exception(Location location)
+            RuntimeError Exception(Location location)
             {
-                return new ScriptException($"Cannot calculate modulo of {left.GetType().Name} by {right.GetType().Name}", location);
+                return new RuntimeError($"Cannot calculate modulo of {left.GetType().Name} by {right.GetType().Name}", location);
             }
         }
 
@@ -463,7 +463,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="op">The unary negation operation node.</param>
         /// <returns>The evaluated numeric value.</returns>
-        /// <exception cref="ScriptException">Thrown when the operand is not a numeric value.</exception>
+        /// <exception cref="RuntimeError">Thrown when the operand is not a numeric value.</exception>
         private Number EvaluateNegateOp(Ast.NegateOp op)
         {
             var operand = EvaluateExpression(op.Operand);
@@ -472,7 +472,7 @@ namespace BitPatch.DialogLang
             {
                 Integer i => new Integer(-i.Value),
                 Float f => new Float(-f.Value),
-                _ => throw new ScriptException($"Cannot negate {operand.GetType().Name}", op.Operand.Location)
+                _ => throw new RuntimeError($"Cannot negate {operand.GetType().Name}", op.Operand.Location)
             };
         }
 
@@ -482,7 +482,7 @@ namespace BitPatch.DialogLang
         /// <param name="left">The left expression.</param>
         /// <param name="right">The right expression.</param>
         /// <returns>The difference between left and right values.</returns>
-        /// <exception cref="ScriptException">Thrown when the values cannot be compared.</exception>
+        /// <exception cref="RuntimeError">Thrown when the values cannot be compared.</exception>
         private float CompareNumeric(Ast.Expression left, Ast.Expression right)
         {
             var leftValue = EvaluateExpression(left);
@@ -498,9 +498,9 @@ namespace BitPatch.DialogLang
 
             };
 
-            ScriptException Exception(Location location)
+            RuntimeError Exception(Location location)
             {
-                return new ScriptException($"Cannot compare {left.GetType().Name} and {right.GetType().Name}", location);
+                return new RuntimeError($"Cannot compare {left.GetType().Name} and {right.GetType().Name}", location);
             }
         }
 
@@ -527,7 +527,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="variable">The variable node.</param>
         /// <returns>The runtime item of the variable.</returns>
-        /// <exception cref="ScriptException">Thrown when the variable is not defined.</exception>
+        /// <exception cref="RuntimeError">Thrown when the variable is not defined.</exception>
         private RuntimeItem EvaluateVariable(Ast.Variable variable)
         {
             if (_variables.TryGetValue(variable.Name, out var value))
@@ -535,7 +535,7 @@ namespace BitPatch.DialogLang
                 return value;
             }
 
-            throw new ScriptException($"Variable '{variable.Name}' is not defined", variable.Location);
+            throw new RuntimeError($"Variable '{variable.Name}' is not defined", variable.Location);
         }
 
         /// <summary>
@@ -543,7 +543,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="expression">The condition expression.</param>
         /// <returns>The evaluated Boolean value.</returns>
-        /// <exception cref="ScriptException">Thrown when the expression does not evaluate to a Boolean value.</exception>
+        /// <exception cref="RuntimeError">Thrown when the expression does not evaluate to a Boolean value.</exception>
         private Boolean EvaluateCondition(Ast.Expression expression)
         {
             var value = EvaluateExpression(expression);
@@ -553,7 +553,7 @@ namespace BitPatch.DialogLang
                 return boolValue;
             }
 
-            throw new ScriptException($"Expected boolean expression, got {value.GetType().Name}", expression.Location);
+            throw new RuntimeError($"Expected boolean expression, got {value.GetType().Name}", expression.Location);
         }
     }
 }

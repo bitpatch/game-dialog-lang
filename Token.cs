@@ -102,7 +102,8 @@ namespace BitPatch.DialogLang
 
         public static Token NewLine(Location location)
         {
-            return new Token(TokenType.Newline, string.Empty, location);
+            const int NewLineTokenLength = 2;
+            return new Token(TokenType.Newline, string.Empty, location | NewLineTokenLength);
         }
 
         public static Token Indent(Location location)
