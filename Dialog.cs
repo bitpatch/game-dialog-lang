@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace BitPatch.DialogLang
 {
@@ -23,19 +22,12 @@ namespace BitPatch.DialogLang
         /// Executes a Game Dialog Script source code from a string.
         /// Yields runtime items from << statements.
         /// </summary>
-        /// <param name="source">The source code to execute.</param>
+        /// <param name="inlineSource">The source code to execute.</param>
         /// <returns>Enumerable of runtime items.</returns>
-        public IEnumerable<RuntimeItem> RunInline(string source)
+        public IEnumerable<RuntimeItem> RunInline(string inlineSource)
         {
-            if (source is null)
-            {
-                throw new ArgumentNullException(nameof(source));
-            }
-
-            foreach (var item in Run(Source.Inline(source)))
-            {
-                yield return item;
-            }
+            var source = Source.Inline(inlineSource ?? throw new ArgumentNullException(nameof(inlineSource)));
+            return Run(source);
         }
 
         /// <summary>
@@ -46,15 +38,8 @@ namespace BitPatch.DialogLang
         /// <returns>Enumerable of runtime items.</returns>
         public IEnumerable<RuntimeItem> RunFile(string filePath)
         {
-            if (filePath is null)
-            {
-                throw new ArgumentNullException(nameof(filePath));
-            }
-
-            foreach (var item in Run(Source.FromFile(filePath)))
-            {
-                yield return item;
-            }
+            var source = Source.FromFile(filePath ?? throw new ArgumentNullException(nameof(filePath)));
+            return Run(source);
         }
 
         /// <summary>
@@ -71,10 +56,13 @@ namespace BitPatch.DialogLang
 
             // Parse (streaming).
             var parser = new Parser(tokens);
-            var statements = parser.Parse().ToList();
+            var statements = parser.Parse();
 
             // Execute (streaming) - yields output values from << statements.
-            return _interpreter.Execute(statements);
+            foreach (var item in _interpreter.Execute(statements))
+            {
+                yield return item;
+            }
         }
 
         /// <summary>
