@@ -10,8 +10,13 @@ namespace BitPatch.DialogLang
         public int Line => Location.Line;
         public int Initial => Location.Initial;
         public int Final => Location.Final;
+        
+        /// <summary>
+        /// Gets the source code input where the error occurred.
+        /// </summary>
+        public Source SourceCode => Location.Source;
 
-        private Location Location { get; }
+        internal Location Location { get; }
 
         internal ScriptException(string message, Location location) : base(message)
         {
