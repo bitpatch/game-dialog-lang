@@ -156,7 +156,7 @@ namespace BitPatch.DialogLang
 
             if (identLevel != currentLevel)
             {
-                throw new InvalidSyntaxException("Inconsistent indentation", CurrentLocation);
+                throw new SyntaxError("Inconsistent indentation", CurrentLocation);
             }
 
             return (TokenType.Dedent, count);
@@ -196,7 +196,7 @@ namespace BitPatch.DialogLang
                     }
                     else if (ch != _indentStyle)
                     {
-                        throw new InvalidSyntaxException("Inconsistent use of tabs and spaces for indentation", CurrentLocation);
+                        throw new SyntaxError("Inconsistent use of tabs and spaces for indentation", CurrentLocation);
                     }
 
                     identLevel++;
@@ -249,7 +249,7 @@ namespace BitPatch.DialogLang
                 ')' => ReadSingleCharToken(TokenType.RightParen, ")"),
 
                 // Unknown character
-                _ => throw new InvalidSyntaxException("Unexpected symbol", CurrentLocation),
+                _ => throw new SyntaxError("Unexpected symbol", CurrentLocation),
             };
         }
 
@@ -332,7 +332,7 @@ namespace BitPatch.DialogLang
                 return new Token(TokenType.NotEqual, "!=", _source, line, initial, _column);
             }
 
-            throw new InvalidSyntaxException("Unexpected symbol '!'", _source, line, initial);
+            throw new SyntaxError("Unexpected symbol '!'", new Location(_source, line, initial));
         }
 
         /// <summary>
@@ -441,7 +441,7 @@ namespace BitPatch.DialogLang
 
                     if (_current == -1)
                     {
-                        throw new InvalidSyntaxException(CurrentLocation);
+                        throw new SyntaxError(CurrentLocation);
                     }
 
                     var escapeChar = (char)_current;
@@ -452,14 +452,14 @@ namespace BitPatch.DialogLang
                         'r' => '\r',
                         '\\' => '\\',
                         '"' => '"',
-                        _ => throw new InvalidSyntaxException($"Invalid escape sequence: \\{escapeChar}", CurrentLocation)
+                        _ => throw new SyntaxError($"Invalid escape sequence: \\{escapeChar}", CurrentLocation)
                     });
 
                     MoveNextChar();
                 }
                 else if (_current.IsNewLine())
                 {
-                    throw new InvalidSyntaxException("String is not closed with a quote", CurrentLocation);
+                    throw new SyntaxError("String is not closed with a quote", CurrentLocation);
                 }
                 else
                 {
@@ -470,7 +470,7 @@ namespace BitPatch.DialogLang
 
             if (_current == -1)
             {
-                throw new InvalidSyntaxException("Unterminated string literal", CurrentLocation);
+                throw new SyntaxError("Unterminated string literal", CurrentLocation);
             }
 
             // Skip closing quote
@@ -489,10 +489,11 @@ namespace BitPatch.DialogLang
                 throw new InvalidOperationException("End of file reached while trying to read newline");
             }
 
+            var location = CurrentLocation;
             MoveNextChar();
 
             _atLineStart = true; // Next token will handle indentation
-            return Token.NewLine(CurrentLocation);
+            return Token.NewLine(location);
         }
 
         /// <summary>

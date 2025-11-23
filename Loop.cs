@@ -50,7 +50,7 @@ namespace BitPatch.DialogLang
         {
             if (_iterationCount > maxIterations)
             {
-                throw new ScriptException($"More than {maxIterations} iterations exceeded at line {Line}, possible infinite loop", _location);
+                throw new RuntimeError($"More than {maxIterations} iterations exceeded at line {Line}, possible infinite loop", _location);
             }
 
             return this;

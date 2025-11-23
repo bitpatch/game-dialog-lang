@@ -18,7 +18,7 @@ namespace BitPatch.DialogLang
         /// <param name="indent">Optional indentation string (default is 4 spaces).</param>
         /// <returns>A formatted error message with source context, or a fallback message if source cannot be read.</returns>
         /// <exception cref="ArgumentNullException">Thrown when exception is null.</exception>
-        public static string FormatError(ScriptException exception, string indent = "    ")
+        public static string FormatError(ScriptError exception, string indent = "    ")
         {
             if (exception is null)
             {
@@ -32,18 +32,23 @@ namespace BitPatch.DialogLang
 
             try
             {
+                var result = new StringBuilder();
+                result.AppendLine($"{exception.GetType().Name}: {exception.Message}");
+                result.AppendLine($"{exception.SourceCode}, line {exception.Line}");
+
                 if (exception.Line <= 0)
                 {
-                    return indent + "<unknown location>";
+                    result.AppendLine(indent + "<unknown location>");
+                    return result.ToString();
                 }
 
                 string? errorLine = GetSourceLine(exception.SourceCode, exception.Line);
-                if (errorLine == null)
+                if (errorLine is null)
                 {
-                    return indent + "<line unavailable>";
+                    result.AppendLine(indent + "<line unavailable>");
+                    return result.ToString();
                 }
 
-                var result = new StringBuilder();
                 result.AppendLine(indent + errorLine);
 
                 // Build the underline with proper spacing and tabs
@@ -64,10 +69,9 @@ namespace BitPatch.DialogLang
                 }
 
                 // Underline the error range with tildes
-                int underlineLength = Math.Max(1, exception.Final - exception.Initial + 1);
-                underlineBuilder.Append('~', underlineLength);
-
-                result.Append(underlineBuilder.ToString());
+                int underlineLength = Math.Max(1, exception.Final - exception.Initial);
+                underlineBuilder.Append('¯', underlineLength);
+                result.AppendLine(underlineBuilder.ToString());
 
                 return result.ToString();
             }

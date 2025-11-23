@@ -23,9 +23,14 @@ namespace BitPatch.DialogLang
         public int Initial { get; }
 
         /// <summary>
-        /// End column (1-based, inclusive).
+        /// End column (1-based, exclusive).
         /// </summary>
         public int Final { get; }
+
+        /// <summary>
+        /// Length of the location range.
+        /// </summary>
+        public int Length => Final - Initial;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Location"/> struct.
@@ -46,14 +51,6 @@ namespace BitPatch.DialogLang
         }
 
         /// <summary>
-        /// Returns a new location immediately after the current one.
-        /// </summary>
-         public Location After()
-        {
-            return new Location(Source, Line, Final, Final + 1);
-        }
-
-        /// <summary>
         /// Combines two locations into a single range spanning from the start of the first to the end of the second.
         /// </summary>
         /// <exception cref="InvalidOperationException">Thrown when the sources or lines of the two locations differ.</exception>
@@ -70,6 +67,23 @@ namespace BitPatch.DialogLang
             }
 
             return new Location(left.Source, left.Line, left.Initial, right.Final);
+        }
+
+        /// <summary>
+        /// Creates a new location with the specified length starting from the same position as the current location.
+        /// </summary>
+        /// <param name="location">The base location.</param>
+        /// <param name="length">The length of the new location range (must be positive).</param>
+        /// <returns>A new location starting at <c>Initial</c> and ending at <c>Initial + length</c> on the same line and source.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="length"/> is less than 1.</exception>
+        public static Location operator |(Location location, int length)
+        {
+            if (length < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(length), "Length must be positive.");
+            }
+
+            return new Location(location.Source, location.Line, location.Initial, location.Initial + length);
         }
 
         /// <summary>
