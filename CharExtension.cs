@@ -22,6 +22,14 @@ namespace BitPatch.DialogLang
         }
 
         /// <summary>
+        /// Checks if the integer represents the end of source code.
+        /// </summary>
+        public static bool IsEndOfSource(this int n)
+        {
+            return n is -1;
+        }
+
+        /// <summary>
         /// Checks if the integer represents a whitespace character that is not a newline.
         /// </summary>
         public static bool IsWhiteSpace(this int n)
@@ -49,14 +57,6 @@ namespace BitPatch.DialogLang
         public static bool IsDigit(this int n)
         {
             return n is not -1 && char.IsDigit((char)n);
-        }
-
-        /// <summary>
-        /// Checks if the integer represents a valid character.
-        /// </summary>
-        public static bool IsChar(this int n)
-        {
-            return n is not -1;
         }
     }
 }

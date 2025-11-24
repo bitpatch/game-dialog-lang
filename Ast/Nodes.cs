@@ -5,9 +5,7 @@ namespace BitPatch.DialogLang.Ast
     /// <summary>
     /// Base class for all AST nodes.
     /// </summary>
-    internal abstract record Node(Location Location)
-    {
-    }
+    internal abstract record Node(Location Location) {}
 
     /// <summary>
     /// Indicates that the expression may return a boolean value.
@@ -22,7 +20,7 @@ namespace BitPatch.DialogLang.Ast
     /// <summary>
     /// Base class for all expressions (evaluated, return values).
     /// </summary>
-    internal abstract record Expression(Location Location) : Node(Location);
+    internal abstract record Expression(Location Location) : Node(Location) { }
 
     /// <summary>
     /// Root node representing the entire program.
@@ -47,7 +45,12 @@ namespace BitPatch.DialogLang.Ast
     /// <summary>
     /// Node representing a string literal.
     /// </summary>
-    internal sealed record String(string Value, Location Location) : Expression(Location);
+    internal sealed record InlineString(string Value, Location Location) : Expression(Location);
+
+    /// <summary>
+    /// Node representing an interpolated string with expressions.
+    /// </summary>
+    internal sealed record String(IReadOnlyList<Expression> Parts, Location Location) : Expression(Location);
 
     /// <summary>
     /// Node representing a boolean literal.

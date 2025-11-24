@@ -51,9 +51,9 @@ namespace BitPatch.DialogLang
         private char _indentStyle;
 
         /// <summary>
-        /// Indicates if we are at the start of a new line (to process indentation).
+        /// The current lexer state.
         /// </summary>
-        private bool _atLineStart;
+        private LexerState _state;
 
         /// <summary>
         /// Gets the current location in the source code.
@@ -73,7 +73,7 @@ namespace BitPatch.DialogLang
             _indents.Clear();
             _indents.Push(0);
             _indentStyle = '\0';
-            _atLineStart = true;
+            _state = LexerState.AtLineStart;
         }
 
         public void Dispose()
@@ -86,13 +86,13 @@ namespace BitPatch.DialogLang
         /// </summary>
         public IEnumerable<Token> Tokenize()
         {
-            while (_current.IsChar())
+            while (!_current.IsEndOfSource())
             {
-                if (_atLineStart)
+                if (_state is LexerState.AtLineStart)
                 {
                     var (tokenType, count) = ReadIndentation();
 
-                    if (!_current.IsChar())
+                    if (_current.IsEndOfSource())
                     {
                         break;
                     }
@@ -109,16 +109,29 @@ namespace BitPatch.DialogLang
                         yield return identToken;
                     }
 
-                    _atLineStart = false;
+                    _state = LexerState.Default;
                 }
 
-                SkipEmptyChars();
-                yield return ReadFromCharacter((char)_current);
+                switch (_state)
+                {
+                    case LexerState.Default:
+                    case LexerState.ReadingInlineExpression:
+                        SkipEmptyChars();
+                        yield return ReadCharacter((char)_current);
+                        break;
+                    case LexerState.ReadingString:
+                        yield return ReadString();
+                        break;
+                    case LexerState.AtLineStart:
+                        throw new Exception("Cannot reach here");
+                    default:
+                        throw new NotSupportedException("Unknown lexer state: " + _state);
+                }
             }
 
-            if (!_atLineStart)
+            if (_state is not LexerState.AtLineStart)
             {
-                yield return Token.NewLine(CurrentLocation);
+                yield return new Token(TokenType.Newline, string.Empty, CurrentLocation);
             }
 
             // Generate Dedent tokens for all remaining indentation levels.
@@ -128,7 +141,7 @@ namespace BitPatch.DialogLang
                 yield return Token.Dedent(CurrentLocation);
             }
 
-            yield return Token.EndOfFile(CurrentLocation);
+            yield return new Token(TokenType.EndOfSource, string.Empty, CurrentLocation);
         }
 
         /// <summary>
@@ -167,34 +180,34 @@ namespace BitPatch.DialogLang
         /// </summary>
         private int ReadIndentationLevel()
         {
-            if (!_atLineStart)
+            if (_state is not LexerState.AtLineStart)
             {
                 throw new InvalidOperationException($"{nameof(ReadIndentationLevel)} called when not at the start of a line");
             }
 
             int identLevel = 0;
 
-            while (_current.IsChar())
+            while (!_current.IsEndOfSource())
             {
-                var ch = (char)_current;
+                var charValue = (char)_current;
 
-                if (ch is '#')
+                if (charValue is '#')
                 {
                     SkipComment();
                     continue;
                 }
 
-                if (ch.IsNewLine())
+                if (charValue.IsNewLine())
                 {
                     identLevel = 0;
                 }
-                else if (ch is ' ' or '\t')
+                else if (charValue is ' ' or '\t')
                 {
                     if (_indentStyle is '\0')
                     {
-                        _indentStyle = ch;
+                        _indentStyle = charValue;
                     }
-                    else if (ch != _indentStyle)
+                    else if (charValue != _indentStyle)
                     {
                         throw new SyntaxError("Inconsistent use of tabs and spaces for indentation", CurrentLocation);
                     }
@@ -206,7 +219,7 @@ namespace BitPatch.DialogLang
                     break;
                 }
 
-                MoveNextChar();
+                MoveNext();
             }
 
             return identLevel;
@@ -215,15 +228,18 @@ namespace BitPatch.DialogLang
         /// <summary>
         /// Reads a token starting from the given character.
         /// </summary>
-        private Token ReadFromCharacter(char value)
+        private Token ReadCharacter(char value)
         {
+            AssertStates(LexerState.Default, LexerState.ReadingInlineExpression, "Cannot read character");
+
             return value switch
             {
                 // Newline (statement terminator)
                 '\n' or '\r' or '\u2028' or '\u2029' or '\u0085' => ReadNewline(),
 
                 // String literal
-                '"' => ReadString(),
+                '"' when _state is LexerState.Default => ReadStringStart(),
+                '"' when _state is LexerState.ReadingInlineExpression => ReadInlineString(),
 
                 // Integer number
                 >= '0' and <= '9' => ReadNumber(),
@@ -238,19 +254,34 @@ namespace BitPatch.DialogLang
                 '<' => ReadFromLessThanSign(),
                 '>' => ReadFromGreaterThanSign(),
                 '!' => ReadFromExclamationMark(),
-                '+' => ReadSingleCharToken(TokenType.Plus, "+"),
-                '-' => ReadSingleCharToken(TokenType.Minus, "-"),
-                '*' => ReadSingleCharToken(TokenType.Multiply, "*"),
-                '/' => ReadSingleCharToken(TokenType.Divide, "/"),
-                '%' => ReadSingleCharToken(TokenType.Modulo, "%"),
+                '+' => ReadSingleToken(TokenType.Plus, "+"),
+                '-' => ReadSingleToken(TokenType.Minus, "-"),
+                '*' => ReadSingleToken(TokenType.Multiply, "*"),
+                '/' => ReadSingleToken(TokenType.Divide, "/"),
+                '%' => ReadSingleToken(TokenType.Modulo, "%"),
 
                 // Delimiters
-                '(' => ReadSingleCharToken(TokenType.LeftParen, "("),
-                ')' => ReadSingleCharToken(TokenType.RightParen, ")"),
+                '(' => ReadSingleToken(TokenType.LeftParen, "("),
+                ')' => ReadSingleToken(TokenType.RightParen, ")"),
+
+                // Expression braces
+                '{' when _state is LexerState.ReadingInlineExpression => throw new SyntaxError("Nested '{' in expression is not allowed", CurrentLocation),
+                '}' when _state is LexerState.ReadingInlineExpression => FinishExpression(),
 
                 // Unknown character
                 _ => throw new SyntaxError("Unexpected symbol", CurrentLocation),
             };
+        }
+
+        private Token FinishExpression()
+        {
+            if (_state is not LexerState.ReadingInlineExpression)
+            {
+                throw new InvalidOperationException($"Cannot finish expression, state is '{_state}'");
+            }
+
+            _state = LexerState.ReadingString;
+            return ReadSingleToken(TokenType.InlineExpressionEnd, "}");
         }
 
         /// <summary>
@@ -258,24 +289,23 @@ namespace BitPatch.DialogLang
         /// </summary>
         private Token ReadFromLessThanSign()
         {
-            var line = _line;
-            var initial = _column;
+            var startLocation = CurrentLocation;
 
-            MoveNextChar(); // consume first '<'
+            Read('<'); // Consume first '<'
 
             if (_current is '<')
             {
-                MoveNextChar(); // consume second '<'
-                return new Token(TokenType.Output, "<<", _source, line, initial, _column);
+                Read('<'); // Consume second '<'
+                return new Token(TokenType.Output, "<<", startLocation | _column);
             }
 
             if (_current is '=')
             {
-                MoveNextChar(); // consume '='
-                return new Token(TokenType.LessOrEqual, "<=", _source, line, initial, _column);
+                Read('='); // Consume '='
+                return new Token(TokenType.LessOrEqual, "<=", startLocation | _column);
             }
 
-            return new Token(TokenType.LessThan, "<", _source, line, initial, _column);
+            return new Token(TokenType.LessThan, "<", startLocation);
         }
 
         /// <summary>
@@ -283,18 +313,17 @@ namespace BitPatch.DialogLang
         /// </summary>
         private Token ReadFromGreaterThanSign()
         {
-            var line = _line;
-            var initial = _column;
+            var startLocation = CurrentLocation;
 
-            MoveNextChar(); // consume '>'
+            Read('>'); // Consume first '>'
 
             if (_current is '=')
             {
-                MoveNextChar(); // consume '='
-                return new Token(TokenType.GreaterOrEqual, ">=", _source, line, initial, _column);
+                MoveNext(); // Consume '='
+                return new Token(TokenType.GreaterOrEqual, ">=", startLocation | _column);
             }
 
-            return new Token(TokenType.GreaterThan, ">", _source, line, initial, _column);
+            return new Token(TokenType.GreaterThan, ">", startLocation);
         }
 
         /// <summary>
@@ -302,18 +331,17 @@ namespace BitPatch.DialogLang
         /// </summary>
         private Token ReadFromEqualsSign()
         {
-            var line = _line;
-            var initial = _column;
+            var startLocation = CurrentLocation;
 
-            MoveNextChar(); // consume first '='
+            Read('='); // Consume first '='
 
             if (_current is '=')
             {
-                MoveNextChar(); // consume second '='
-                return new Token(TokenType.Equal, "==", _source, line, initial, _column);
+                MoveNext(); // Consume second '='
+                return new Token(TokenType.Equal, "==", startLocation | _column);
             }
 
-            return new Token(TokenType.Assign, "=", _source, line, initial, _column);
+            return new Token(TokenType.Assign, "=", startLocation);
         }
 
         /// <summary>
@@ -321,29 +349,27 @@ namespace BitPatch.DialogLang
         /// </summary>
         private Token ReadFromExclamationMark()
         {
-            var line = _line;
-            var initial = _column;
+            var startLocation = CurrentLocation;
 
-            MoveNextChar(); // consume '!'
+            Read('!'); // Consume '!'
 
             if (_current is '=')
             {
-                MoveNextChar(); // consume '='
-                return new Token(TokenType.NotEqual, "!=", _source, line, initial, _column);
+                MoveNext(); // Consume '='
+                return new Token(TokenType.NotEqual, "!=", startLocation | _column);
             }
 
-            throw new SyntaxError("Unexpected symbol '!'", new Location(_source, line, initial));
+            throw new SyntaxError("Unexpected symbol '!'", startLocation);
         }
 
         /// <summary>
         /// Creates a single-character token and advances position.
         /// </summary>
-        private Token ReadSingleCharToken(TokenType type, string value)
+        private Token ReadSingleToken(TokenType type, string value)
         {
-            var line = _line;
-            var initial = _column;
-            MoveNextChar();
-            return new Token(type, value, _source, line, initial, _column);
+            var startLocation = CurrentLocation;
+            MoveNext();
+            return new Token(type, value, startLocation);
         }
 
         /// <summary>
@@ -353,33 +379,32 @@ namespace BitPatch.DialogLang
         {
             _buffer.Clear();
 
-            var line = _line;
-            var initial = _column;
+            var startLocation = CurrentLocation;
             bool isFloat = false;
 
             // Read integer part
             ReadDigits();
 
             // Check for decimal point
-            if (_current == '.')
+            if (_current is '.')
             {
                 isFloat = true;
                 _buffer.Append('.');
-                MoveNextChar();
+                MoveNext();
 
                 // Read fractional part
                 ReadDigits();
             }
 
             var tokenType = isFloat ? TokenType.Float : TokenType.Integer;
-            return new Token(tokenType, _buffer.ToString(), _source, line, initial, _column);
+            return new Token(tokenType, _buffer.ToString(), startLocation | _column);
 
             void ReadDigits()
             {
                 while (_current.IsDigit())
                 {
                     _buffer.Append((char)_current);
-                    MoveNextChar();
+                    MoveNext();
                 }
             }
         }
@@ -390,16 +415,15 @@ namespace BitPatch.DialogLang
         private Token ReadIdentifierOrKeyword()
         {
             _buffer.Clear();
-            var line = _line;
-            var initial = _column;
+            var startLocation = CurrentLocation;
 
             while (_current.IsIdentifierChar())
             {
                 _buffer.Append((char)_current);
-                MoveNextChar();
+                MoveNext();
             }
 
-            var location = new Location(_source, line, initial, _column);
+            var location = startLocation | _column;
             var value = _buffer.ToString();
 
             // Check for keywords
@@ -421,62 +445,122 @@ namespace BitPatch.DialogLang
         }
 
         /// <summary>
-        /// Reads a string literal from the source (enclosed in double quotes).
+        /// Starts reading from the '"' character.
         /// </summary>
+        private Token ReadStringStart()
+        {
+            AssertState(LexerState.Default, "Cannot start string");
+            _state = LexerState.ReadingString;
+            return ReadSingleToken(TokenType.StringStart, "\"");
+        }
+
+        /// <summary>
+        /// Reads a simple string inside string expression. It includes opening and closing quotes.
+        /// Simple strings ignore inline expressions.
+        /// </summary>
+        /// <returns>A token representing the string value.</returns>
+        /// <exception cref="InvalidOperationException">Thrown if the lexer state is not ReadingInlineExpression.</exception>
+        /// <exception cref="SyntaxError">Thrown if the string is not properly closed.</exception>
+        private Token ReadInlineString()
+        {
+            AssertState(LexerState.ReadingInlineExpression, "Cannot read string");
+
+            var startLocation = CurrentLocation;
+
+            Read('"'); // Expect opening quote
+
+            _buffer.Clear();
+
+            while (!_current.IsEndOfSource() && !_current.IsNewLine())
+            {
+                var charValue = (char)_current;
+                switch (charValue)
+                {
+                    case '\\':
+                        _buffer.Append(ReadEscapeCharacter());
+                        break;
+                    case '"':
+                        Read('"'); // Consume closing quotes
+                        return new Token(TokenType.InlineString, _buffer.ToString(), startLocation | _column);
+                    default:
+                        _buffer.Append(charValue);
+                        MoveNext();
+                        break;
+                }
+            }
+
+            throw new SyntaxError("The string is not closed", CurrentLocation);
+        }
+
+        /// <summary>
+        /// Reads a string literal inside quotes, and excludes them. The string ends when a quote or the start of an
+        /// expression inside the string is encountered.
+        /// </summary>
+        /// <returns>A token representing the string value.</returns>
+        /// <exception cref="InvalidOperationException">Thrown if the lexer state is not ReadingString.</exception>
+        /// <exception cref="SyntaxError">Thrown if the string is not properly closed.</exception>
         private Token ReadString()
         {
+            AssertState(LexerState.ReadingString, "Cannot read string");
+
+            var startLocation = CurrentLocation;
             _buffer.Clear();
-            var line = _line;
-            var initial = _column;
 
-            // Skip opening quote
-            MoveNextChar();
-
-            while (_current != -1 && (char)_current != '"')
+            while (!_current.IsEndOfSource() && !_current.IsNewLine())
             {
-                if ((char)_current == '\\')
+                var charValue = (char)_current;
+                switch (charValue)
                 {
-                    // Handle escape sequences
-                    MoveNextChar();
-
-                    if (_current == -1)
-                    {
-                        throw new SyntaxError(CurrentLocation);
-                    }
-
-                    var escapeChar = (char)_current;
-                    _buffer.Append(escapeChar switch
-                    {
-                        'n' => '\n',
-                        't' => '\t',
-                        'r' => '\r',
-                        '\\' => '\\',
-                        '"' => '"',
-                        _ => throw new SyntaxError($"Invalid escape sequence: \\{escapeChar}", CurrentLocation)
-                    });
-
-                    MoveNextChar();
-                }
-                else if (_current.IsNewLine())
-                {
-                    throw new SyntaxError("String is not closed with a quote", CurrentLocation);
-                }
-                else
-                {
-                    _buffer.Append((char)_current);
-                    MoveNextChar();
+                    case '\\':
+                        _buffer.Append(ReadEscapeCharacter());
+                        break;
+                    case '{' when _buffer.Length > 0:
+                    case '"' when _buffer.Length > 0:
+                        // Return the accumulated string before handling special character.
+                        return new Token(TokenType.InlineString, _buffer.ToString(), startLocation | _column);
+                    case '{' when _buffer.Length is 0:
+                        _state = LexerState.ReadingInlineExpression; // Switch to expression reading state
+                        return ReadSingleToken(TokenType.InlineExpressionStart, "{");
+                    case '"' when _buffer.Length is 0:
+                        _state = LexerState.Default; // Finish string readings
+                        return ReadSingleToken(TokenType.StringEnd, "\"");
+                    default:
+                        _buffer.Append(charValue);
+                        MoveNext();
+                        break;
                 }
             }
 
-            if (_current == -1)
+            throw new SyntaxError("The string is not closed", CurrentLocation);
+        }
+
+        /// <summary>
+        /// Reads a newline token and updates the lexer state.
+        /// </summary>
+        private char ReadEscapeCharacter()
+        {
+            var startLocation = CurrentLocation;
+            Read('\\'); // Skip the backslash
+
+            if (_current is -1 || _current.IsNewLine())
             {
-                throw new SyntaxError("Unterminated string literal", CurrentLocation);
+                throw new SyntaxError("The string is not closed", startLocation | _column);
             }
 
-            // Skip closing quote
-            MoveNextChar();
+            var value = (char)_current;
+            var escapeChar = value switch
+            {
+                'n' => '\n',
+                't' => '\t',
+                'r' => '\r',
+                '\\' => '\\',
+                '{' => '{',
+                '}' => '}',
+                _ => throw new SyntaxError($"Invalid escape sequence: \\{value}", startLocation | _column)
+            };
 
-            return new Token(TokenType.String, _buffer.ToString(), _source, line, initial, _column);
+            MoveNext();
+            return escapeChar;
         }
 
         /// <summary>
@@ -489,11 +573,7 @@ namespace BitPatch.DialogLang
                 throw new InvalidOperationException("End of file reached while trying to read newline");
             }
 
-            var location = CurrentLocation;
-            MoveNextChar();
-
-            _atLineStart = true; // Next token will handle indentation
-            return Token.NewLine(location);
+            return ReadSingleToken(TokenType.Newline, string.Empty);
         }
 
         /// <summary>
@@ -506,24 +586,24 @@ namespace BitPatch.DialogLang
                 return;
             }
 
-            MoveNextChar();
+            MoveNext();
 
             while (!_current.IsNewLine())
             {
-                MoveNextChar();
+                MoveNext();
             }
         }
 
         /// <summary>
-        /// Advances to the next character.
+        /// Advances to the next character in the source.
         /// </summary>
-        private void MoveNextChar()
+        private void MoveNext()
         {
             if (_current.IsNewLine())
             {
                 _line++;
                 _column = 1;
-                _atLineStart = true;
+                _state = LexerState.AtLineStart;
             }
             else
             {
@@ -534,16 +614,60 @@ namespace BitPatch.DialogLang
         }
 
         /// <summary>
+        /// Reads the next character with a validation check.
+        /// </summary>
+        /// <param name="value">The expected character.</param>
+        /// <exception cref="InvalidOperationException">Thrown if the current character does not match the expected character.</exception>
+        private void Read(char value)
+        {
+            if (_current != value)
+            {
+                throw new InvalidOperationException($"Expected character '{value}' but found '{(char)_current}'");
+            }
+
+            MoveNext();
+        }
+
+        /// <summary>
         /// Skips whitespace characters except newlines and comments.
         /// </summary>
         private void SkipEmptyChars()
         {
             while (_current.IsWhiteSpace())
             {
-                MoveNextChar();
+                MoveNext();
             }
 
             SkipComment();
+        }
+
+        /// <summary>
+        /// Asserts that the lexer is in the expected state.
+        /// </summary>
+        /// <param name="expected">The expected lexer state.</param>
+        /// <param name="message">The message to include in the exception if the state does not match.</param>
+        /// <exception cref="InvalidOperationException">Thrown if the lexer state does not match the expected state.</exception>
+        private void AssertState(LexerState expected, string message)
+        {
+            if (_state != expected)
+            {
+                throw new InvalidOperationException($"{message}, state is '{_state}'");
+            }
+        }
+
+        /// <summary>
+        /// Asserts that the lexer is in one of the expected states.
+        /// </summary>
+        /// <param name="expected1">The first expected lexer state.</param>
+        /// <param name="expected2">The second expected lexer state.</param>
+        /// <param name="message">The message to include in the exception if the state does not match.</param>
+        /// <exception cref="InvalidOperationException">Thrown if the lexer state does not match either of the expected states.</exception>s]
+        private void AssertStates(LexerState expected1, LexerState expected2, string message)
+        {
+            if (_state != expected1 && _state != expected2)
+            {
+                throw new InvalidOperationException($"{message}, state is '{_state}'");
+            }
         }
     }
 }

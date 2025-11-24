@@ -11,19 +11,19 @@ namespace BitPatch.DialogLang
         /// <summary>
         /// The type of source code input.
         /// </summary>
-        private readonly SourceType _type;
+        public readonly SourceType Type;
 
         /// <summary>
         /// The value associated with the source (either the inline code or the file path).
         /// </summary>
-        public readonly string _value;
+        private readonly string _value;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Source"/> struct.
         /// </summary>
         private Source(SourceType type, string value)
         {
-            _type = type;
+            Type = type;
             _value = value;
         }
 
@@ -56,12 +56,12 @@ namespace BitPatch.DialogLang
         /// </summary>
         public TextReader CreateReader()
         {
-            return _type switch
+            return Type switch
             {
                 SourceType.None => throw new InvalidOperationException("Cannot create reader for empty source."),
                 SourceType.Inline => new StringReader(_value),
                 SourceType.File => new StreamReader(File.OpenRead(_value)),
-                _ => throw new NotSupportedException($"Unknown source type: {_type}"),
+                _ => throw new NotSupportedException($"Unknown source type: {Type}"),
             };
         }
 
@@ -70,7 +70,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         public static bool operator ==(Source left, Source right)
         {
-            return left._type == right._type && left._value == right._value;
+            return left.Type == right.Type && left._value == right._value;
         }
 
         /// <summary>
@@ -98,7 +98,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         public override string ToString()
         {
-            return _type switch
+            return Type switch
             {
                 SourceType.None => "Empty",
                 SourceType.Inline => "Inline",
@@ -112,17 +112,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         public override int GetHashCode()
         {
-            return HashCode.Combine(_type, _value);
-        }
-
-        /// <summary>
-        /// The type of source code input.
-        /// </summary>
-        private enum SourceType
-        {
-            None,
-            Inline,
-            File
+            return HashCode.Combine(Type, _value);
         }
     }
 }

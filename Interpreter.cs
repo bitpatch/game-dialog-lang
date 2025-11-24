@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace BitPatch.DialogLang
 {
@@ -17,6 +18,11 @@ namespace BitPatch.DialogLang
         /// Maximum allowed iterations for loops to prevent infinite loops.
         /// </summary>
         private readonly int MaxLoopIterations;
+
+        /// <summary>
+        /// StringBuilder to accumulate output text.
+        /// </summary>
+        private readonly StringBuilder _buffer = new();
 
         /// <summary>
         /// Initializes a new instance of the Interpreter class.
@@ -129,7 +135,8 @@ namespace BitPatch.DialogLang
             {
                 Ast.Integer integer => new Integer(integer.Value),
                 Ast.Float floatNode => new Float(floatNode.Value),
-                Ast.String str => new String(str.Value),
+                Ast.InlineString str => new String(str.Value),
+                Ast.String interpolated => EvaluateInterpolatedString(interpolated),
                 Ast.Boolean boolean => new Boolean(boolean.Value),
                 Ast.Variable variable => EvaluateVariable(variable),
                 Ast.AndOp andOp => EvaluateAndOp(andOp),
@@ -536,6 +543,24 @@ namespace BitPatch.DialogLang
             }
 
             throw new RuntimeError($"Variable '{variable.Name}' is not defined", variable.Location);
+        }
+
+        /// <summary>
+        /// Evaluates an interpolated string by concatenating its parts.
+        /// </summary>
+        /// <param name="interpolated">The interpolated string node.</param>
+        /// <returns>The evaluated String value.</returns>
+        private String EvaluateInterpolatedString(Ast.String interpolated)
+        {
+            _buffer.Clear();
+
+            foreach (var part in interpolated.Parts)
+            {
+                var value = EvaluateExpression(part);
+                _buffer.Append(value.ToString());
+            }
+
+            return new String(_buffer.ToString());
         }
 
         /// <summary>

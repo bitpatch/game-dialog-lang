@@ -41,15 +41,6 @@ namespace BitPatch.DialogLang
         {
             Location = location;
         }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ScriptError"/> class.
-        /// </summary>
-        /// <param name="location">The location in the source code where the error occurred.</param>
-        internal ScriptError(Location location) : base()
-        {
-            Location = location;
-        }
     }
 
     /// <summary>
@@ -61,7 +52,7 @@ namespace BitPatch.DialogLang
         /// Initializes a new instance of the <see cref="SyntaxError"/> class.
         /// </summary>
         /// <param name="location">The location in the source code where the syntax error occurred.</param>
-        internal SyntaxError(Location location) : base(location)
+        internal SyntaxError(Location location) : base("Invalid syntax", location)
         {
         }
 
@@ -81,14 +72,6 @@ namespace BitPatch.DialogLang
     /// </summary>
     public class RuntimeError : ScriptError
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="RuntimeError"/> class.
-        /// </summary>
-        /// <param name="location">The location in the source code where the runtime error occurred.</param>
-        internal RuntimeError(Location location) : base(location)
-        {
-        }
-
         /// <summary>
         /// Initializes a new instance of the <see cref="RuntimeError"/> class.
         /// </summary>
