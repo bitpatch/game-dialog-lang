@@ -29,7 +29,7 @@ namespace BitPatch.DialogLang
         /// </summary>
         public IEnumerable<Ast.Statement> Parse()
         {
-            while (!_current.IsEndOfFile())
+            while (!_current.IsEndOfSource())
             {
                 yield return ParseStatement();
             }
@@ -51,6 +51,9 @@ namespace BitPatch.DialogLang
             };
         }
 
+        /// <summary>
+        /// Parses a statement starting with an identifier.
+        /// </summary>
         private Ast.Statement ParseStatementFromIdentifier()
         {
             return _next.Type switch
@@ -108,6 +111,17 @@ namespace BitPatch.DialogLang
             Consume(TokenType.Dedent); // expect end of block
 
             return new Ast.Block(statements, startLocation);
+        }
+
+        private Ast.Expression ParseInlineExpression()
+        {
+            Consume(TokenType.InlineExpressionStart); // Consume '{'
+
+            var expression = ParseExpression();
+
+            Consume(TokenType.InlineExpressionEnd); // Consume '}'
+
+            return expression;
         }
 
         /// <summary>
@@ -184,7 +198,7 @@ namespace BitPatch.DialogLang
         {
             var startLocation = _current.Location;
             var condition = ParseExpression();
-            var newLine = Consume(TokenType.Newline); // expect newline after condition
+            var newLine = Consume(TokenType.Newline); // Esxpect newline after condition
 
             // Expect an indented block (then block cannot be empty).
             if (_current.Type is not TokenType.Indent)
@@ -196,11 +210,14 @@ namespace BitPatch.DialogLang
             return new Ast.ConditionalBlock(condition.AssertBoolean(), thenBlock, startLocation | condition.Location);
         }
 
+        /// <summary>
+        /// Parses an identifier.
+        /// </summary>
         private Ast.Identifier ParseIdentifier()
         {
             var token = _current;
 
-            Consume(TokenType.Identifier); // consume identifier
+            Consume(TokenType.Identifier);
             return new Ast.Identifier(token.Value, token.Location);
         }
 
@@ -358,7 +375,7 @@ namespace BitPatch.DialogLang
                 return new Ast.NegateOp(operand, startLocation | operand.Location);
             }
 
-            return ParsePrimaryExpression();
+            return ParsePrimary();
         }
 
         /// <summary>
@@ -378,31 +395,48 @@ namespace BitPatch.DialogLang
         }
 
         /// <summary>
-        /// Parses primary expression (literals, variables, parenthesized expressions)
+        /// Parses primary expression, such as literals, variables, parenthesized expressions.
         /// </summary>
-        private Ast.Expression ParsePrimaryExpression()
+        private Ast.Expression ParsePrimary()
         {
             var token = _current;
+
+            return token.Type switch
+            {
+                TokenType.StringStart => ParseString(token.Location),
+                TokenType.LeftParen => ParseParenthesizedExpression(),
+                _ => ParsePrimitive()
+            };
+        }
+
+        /// <summary>
+        /// Parses a primitive expression that consists of a single token.
+        /// </summary>
+        private Ast.Expression ParsePrimitive()
+        {
+            var token = _current;
+            
             MoveNext();
 
             return token.Type switch
             {
                 TokenType.Integer => new Ast.Integer(int.Parse(token.Value, CultureInfo.InvariantCulture), token.Location),
                 TokenType.Float => new Ast.Float(float.Parse(token.Value, CultureInfo.InvariantCulture), token.Location),
-                TokenType.String => new Ast.String(token.Value, token.Location),
+                TokenType.InlineString => new Ast.InlineString(token.Value, token.Location),
                 TokenType.True => new Ast.Boolean(true, token.Location),
                 TokenType.False => new Ast.Boolean(false, token.Location),
                 TokenType.Identifier => new Ast.Variable(token.Value, token.Location),
-                TokenType.LeftParen => ParseParenthesizedExpression(),
                 _ => throw new SyntaxError(token.Location)
             };
         }
 
         /// <summary>
-        /// Parses a parenthesized expression: (expression)
+        /// Parses a parenthesized expression, for example (x * 3 + 5).
         /// </summary>
         private Ast.Expression ParseParenthesizedExpression()
         {
+            var leftParen = Consume(TokenType.LeftParen); // Expect '('
+            
             var expression = ParseExpression();
 
             if (_current.Type is not TokenType.RightParen)
@@ -410,17 +444,62 @@ namespace BitPatch.DialogLang
                 throw new SyntaxError(_current.Location);
             }
 
-            MoveNext(); // consume ')'
-            return expression;
+            var rightParen = Consume(TokenType.RightParen); // Expect ')'
+            return expression with { Location = leftParen.Location | rightParen.Location };
         }
 
         /// <summary>
-        /// Moves to the next token
+        /// Parses an interpolated string.
+        /// </summary>
+        private Ast.Expression ParseString(Location startLocation)
+        {
+            var openingQuote = Consume(TokenType.StringStart); // Expect opening quote
+            var parts = new List<Ast.Expression>();
+
+            while (_current.Type is not TokenType.StringEnd)
+            {
+                switch (_current.Type)
+                {
+                    case TokenType.InlineString:
+                        var textToken = _current;
+                        MoveNext();
+                        parts.Add(new Ast.InlineString(textToken.Value, textToken.Location));
+                        break;
+                    case TokenType.InlineExpressionStart:
+                        var expretion = ParseInlineExpression();
+                        parts.Add(expretion);
+                        break;
+                    default:
+                        throw new SyntaxError(_current.Location);
+                }
+            }
+
+            var closingQuote = Consume(TokenType.StringEnd); // Expect closing quote
+
+            // If no parts at all, return empty string.
+            if (parts.Count is 0)
+            {
+                return new Ast.InlineString(string.Empty, openingQuote.Location | closingQuote.Location);
+            }
+
+            // If only one part and it's a string, return it directly (optimization).
+            if (parts.Count is 1 && parts[0] is Ast.InlineString astString)
+            {
+                return astString with { Location = openingQuote.Location | closingQuote.Location };
+            }
+
+            return new Ast.String(parts, openingQuote.Location | closingQuote.Location);
+        }
+
+        /// <summary>
+        /// Moves to the next token.
         /// </summary>
         private void MoveNext()
         {
             _current = _next;
-            _next = _tokens.MoveNext() ? _tokens.Current : Token.EndOfFile(_current.Location);
+            _next = _tokens.MoveNext()
+                ? _tokens.Current
+                : new Token(TokenType.EndOfSource, string.Empty, _current.Location);
         }
 
         /// <summary>

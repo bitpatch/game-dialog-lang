@@ -28,14 +28,9 @@ namespace BitPatch.DialogLang
         public int Final { get; }
 
         /// <summary>
-        /// Length of the location range.
-        /// </summary>
-        public int Length => Final - Initial;
-
-        /// <summary>
         /// Initializes a new instance of the <see cref="Location"/> struct.
         /// </summary>
-        public Location(Source source, int line, int position) : this(source, line, position, position)
+        public Location(Source source, int line, int position) : this(source, line, position, position + 1)
         {
         }
 
@@ -44,6 +39,11 @@ namespace BitPatch.DialogLang
         /// </summary>
         public Location(Source source, int line, int initial, int final)
         {
+            if (final <= initial)
+            {
+                throw new ArgumentOutOfRangeException(nameof(final), "Final position must be greater than initial position.");
+            }
+
             Source = source;
             Line = line;
             Initial = initial;
@@ -66,24 +66,29 @@ namespace BitPatch.DialogLang
                 throw new ArgumentException($"Cannot combine locations from different lines. Left line: {left.Line}, Right line: {right.Line}");
             }
 
+            if (left.Initial > right.Final)
+            {
+                throw new ArgumentException($"Left location must start before right one. Left initial: {left.Initial}, Right final: {right.Final}");
+            }
+
             return new Location(left.Source, left.Line, left.Initial, right.Final);
         }
 
         /// <summary>
-        /// Creates a new location with the specified length starting from the same position as the current location.
+        /// Extends the location to a new final position on the same line and source.
         /// </summary>
         /// <param name="location">The base location.</param>
-        /// <param name="length">The length of the new location range (must be positive).</param>
-        /// <returns>A new location starting at <c>Initial</c> and ending at <c>Initial + length</c> on the same line and source.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="length"/> is less than 1.</exception>
-        public static Location operator |(Location location, int length)
+        /// <param name="final">The final position of the new location range (must be greater than initial).</param>
+        /// <returns>A new location starting at <c>Initial</c> and ending at <c>final</c> on the same line and source.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="final"/> is less than or equal to <c>Initial</c>.</exception>
+        public static Location operator |(Location location, int final)
         {
-            if (length < 1)
+            if (final < location.Final)
             {
-                throw new ArgumentOutOfRangeException(nameof(length), "Length must be positive.");
+                throw new ArgumentOutOfRangeException(nameof(final), "Final position cannot be less than current final position.");
             }
 
-            return new Location(location.Source, location.Line, location.Initial, location.Initial + length);
+            return new Location(location.Source, location.Line, location.Initial, final);
         }
 
         /// <summary>
@@ -91,9 +96,17 @@ namespace BitPatch.DialogLang
         /// </summary>
         public override string ToString()
         {
-            return Initial == Final
-                ? $"Source {Source}, Line {Line}, Col {Initial}"
-                : $"Source {Source}, Line {Line}, Col {Initial}-{Final}";
+            var source = Source.Type switch
+            {
+                SourceType.Inline => "",
+                SourceType.File => $"{Source}, ",
+                SourceType.None => "",
+                _ => throw new NotSupportedException($"Unknown source type: {Source.Type}"),
+            };
+
+            return Initial == Final - 1
+                ? source + $"Line {Line}, Col {Initial}"
+                : source + $"Line {Line}, Col {Initial}-{Final - 1}";
         }
     }
 }

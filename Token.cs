@@ -6,52 +6,56 @@ namespace BitPatch.DialogLang
     internal enum TokenType
     {
         // Literals
-        Integer,        // 123, 456
-        Float,          // 3.14, 2.5
-        String,         // "Hello World"
-        True,           // true
-        False,          // false
-        Identifier,     // variable names
+        Integer,               // 123, 456
+        Float,                 // 3.14, 2.5
+        InlineString,          // "Hello World!" — simple string without interpolation
+        StringStart,           // " — start of string with interpolation
+        StringEnd,             // " — end of string with interpolations
+        InlineExpressionStart, // { — start of inline expression in string
+        InlineExpressionEnd,   // } — end of inline expression in string
+        True,                  // true
+        False,                 // false
+        Identifier,            // variable name
         
         // Operators
-        Assign,         // =
-        Output,         // <<
-        And,            // and
-        Or,             // or
-        Not,            // not
-        Xor,            // xor
-        Plus,           // +
-        Minus,          // -
-        Multiply,       // *
-        Divide,         // /
-        Modulo,         // %
+        Assign,                // =
+        Output,                // <<
+        And,                   // and
+        Or,                    // or
+        Not,                   // not
+        Xor,                   // xor
+        Plus,                  // +
+        Minus,                 // -
+        Multiply,              // *
+        Divide,                // /
+        Modulo,                // %
         
         // Control flow
-        While,          // while
-        Break,          // break (reserved)
-        Continue,       // continue (reserved)
-        If,             // if
-        Else,           // else
+        While,                 // while
+        Break,                 // break (reserved)
+        Continue,              // continue (reserved)
+        If,                    // if
+        Else,                  // else
         
         // Comparison operators
-        GreaterThan,    // >
-        LessThan,       // <
-        GreaterOrEqual, // >=
-        LessOrEqual,    // <=
-        Equal,          // ==
-        NotEqual,       // !=
+        GreaterThan,           // >
+        LessThan,              // <
+        GreaterOrEqual,        // >=
+        LessOrEqual,           // <=
+        Equal,                 // ==
+        NotEqual,              // !=
         
         // Delimiters
-        LeftParen,      // (
-        RightParen,     // )
+        LeftParen,             // (
+        RightParen,            // )
         
         // Indentation
-        Indent,         // Increase in indentation level
-        Dedent,         // Decrease in indentation level
+        Indent,                // Increase in indentation level, opens a block of code
+        Dedent,                // Decrease in indentation level, closes a block of code
         
         // Special
-        Newline,        // End of line (statement terminator)
-        EndOfFile
+        Newline,               // End of line (statement terminator)
+        EndOfSource,           // End of the source code  
     }
 
     /// <summary>
@@ -80,30 +84,14 @@ namespace BitPatch.DialogLang
             Location = location;
         }
 
-        public bool IsEndOfFile()
+        public bool IsEndOfSource()
         {
-            return Type is TokenType.EndOfFile;
-        }
-
-        public static Token EndOfFile(Location location)
-        {
-            return new Token(TokenType.EndOfFile, string.Empty, location);
-        }
-
-        public static Token EndOfFile(Source source, int line, int column)
-        {
-            return EndOfFile(new Location(source, line, column));
+            return Type is TokenType.EndOfSource;
         }
 
         public static Token Empty()
         {
-            return new Token(TokenType.EndOfFile, string.Empty, new Location(Source.Empty(), 0, 0));
-        }
-
-        public static Token NewLine(Location location)
-        {
-            const int NewLineTokenLength = 2;
-            return new Token(TokenType.Newline, string.Empty, location | NewLineTokenLength);
+            return new Token(TokenType.EndOfSource, string.Empty, new Location(Source.Empty(), 0, 0));
         }
 
         public static Token Indent(Location location)
