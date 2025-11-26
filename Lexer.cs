@@ -298,8 +298,9 @@ namespace BitPatch.DialogLang
             }
 
             // Check for decimal point.
-            if (_reader.TrySkip('.'))
+            if (_reader.Peek() is '.')
             {
+                _reader.Read(); // Consume '.'
                 isFloat = true;
                 _buffer.Append('.');
 
@@ -323,7 +324,7 @@ namespace BitPatch.DialogLang
             _buffer.Clear();
             var startLocation = _reader.GetLocation();
 
-            while (_reader.TryReadIdentifier(out var charValue))
+            while (_reader.TryReadLetterOrDigit(out var charValue))
             {
                 _buffer.Append(charValue);
             }

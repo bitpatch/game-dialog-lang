@@ -69,7 +69,7 @@ namespace BitPatch.DialogLang
         /// <summary>
         /// Checks if the integer represents a valid identifier character.
         /// </summary>
-        public static bool IsIdentifier(this int n)
+        public static bool IsLetterOrDigit(this int n)
         {
             if (n is -1)
             {

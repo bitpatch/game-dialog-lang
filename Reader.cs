@@ -120,6 +120,8 @@ namespace BitPatch.DialogLang
                 {
                     _peek = _reader.Read();
                 }
+
+                _peek = '\n'; // Force newline after comment
             }
 
             // Track line and column positions
@@ -157,48 +159,6 @@ namespace BitPatch.DialogLang
         }
 
         /// <summary>
-        /// Determines whether there are more characters to read on the current line (excluding newlines and comments).
-        /// </summary>
-        /// <returns>True if more characters are available on the current line; otherwise, false.</returns>
-        public bool CanReadLine()
-        {
-            return _peek is not -1 && !_peek.IsNewLine() && _peek != '#';
-        }
-
-        /// <summary>
-        /// Attempts to skip the next character if it matches the expected character.
-        /// </summary>
-        /// <param name="expected">The character to skip if it matches.</param>
-        /// <returns>True if the character was skipped; otherwise, false.</returns>
-        public bool TrySkip(char expected)
-        {
-            if (_peek != expected)
-            {
-                return false;
-            }
-
-            Read();
-            return true;
-        }
-
-        /// <summary>
-        /// Attempts to read the next character.
-        /// </summary>
-        /// <param name="result">The character that was read, or default if end of source.</param>
-        /// <returns>True if a character was read; otherwise, false.</returns>
-        public bool TryRead(out char result)
-        {
-            if (_peek is -1)
-            {
-                result = default;
-                return false;
-            }
-
-            result = Read();
-            return true;
-        }
-
-        /// <summary>
         /// Attempts to read the next character if it is a digit (0-9).
         /// </summary>
         /// <param name="result">The digit character that was read, or default if not a digit.</param>
@@ -220,9 +180,9 @@ namespace BitPatch.DialogLang
         /// </summary>
         /// <param name="result">The identifier character that was read, or default if not valid.</param>
         /// <returns>True if an identifier character was read; otherwise, false.</returns>
-        public bool TryReadIdentifier(out char result)
+        public bool TryReadLetterOrDigit(out char result)
         {
-            if (!_peek.IsIdentifier())
+            if (!_peek.IsLetterOrDigit())
             {
                 result = default;
                 return false;
