@@ -13,7 +13,7 @@ namespace BitPatch.DialogLang
         /// <summary>
         /// The state indicating the indenter needs to lock.
         /// </summary>
-        NeedToLock,
+        Locking,
 
         /// <summary>
         /// The state indicating the indenter is locked.

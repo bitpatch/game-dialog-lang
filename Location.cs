@@ -118,25 +118,6 @@ namespace BitPatch.DialogLang
         }
 
         /// <summary>
-        /// Extends the location to a new initial position.
-        /// </summary>
-        /// <param name="initial">The new initial position.</param>
-        /// <param name="location">The base location.</param>
-        /// <returns>
-        /// A new location starting at the specified initial position and ending at <c>Final</c>
-        /// on the same line and source.
-        /// </returns>
-        public static Location operator |(int initial, Location location)
-        {
-            if (location.Initial < initial)
-            {
-                throw new ArgumentException($"Initial position too small, ({initial}) | ({location})");
-            }   
-
-            return new Location(location.Source, location.Line, initial, location.Final);
-        }
-
-        /// <summary>
         /// Returns a string representation of the location.
         /// </summary>
         public override string ToString()

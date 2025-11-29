@@ -350,7 +350,7 @@ namespace BitPatch.DialogLang
                 default:
                     // Triple quotes and more start a multi-line string.
                     _state.Push(LexerState.ReadingMultiString);
-                    _indenter.Lock();
+                    _indenter.StartLocking();
                     _multistringQuotes = quotes;
                     return new Token(TokenType.StringStart, new string('"', quotes), startLocation | _reader);
             }
@@ -462,7 +462,6 @@ namespace BitPatch.DialogLang
                         _state.Push(LexerState.ReadingInlineExpression); // Switch to expression reading state
                         return;
                     case '"':
-                        _indenter.Unlock();
                         var column  = _reader.Column;
                         var quotes = _reader.SkipAll('"');
                         if (quotes == _multistringQuotes)
@@ -472,7 +471,9 @@ namespace BitPatch.DialogLang
                                 var stringToken = new Token(TokenType.InlineString, _stringBuilder.ToString(), startLocation | column);
                                 buffer.Enqueue(stringToken);
                             }
-                            buffer.Enqueue(new Token(TokenType.StringEnd, new string('"', quotes), column | _reader.GetLocation()));
+                            var location = new Location(_reader.Source, startLocation.Line, column, _reader.Column);
+                            buffer.Enqueue(new Token(TokenType.StringEnd, new string('"', quotes), location));
+                            _indenter.Unlock();
                             _state.Pop(); // Finish string readings
                             return;
                         }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using BitPatch.DialogLang.Diagnostic;
 
@@ -47,6 +48,13 @@ namespace BitPatch.DialogLang
             {
                 throw new SyntaxError("Inconsistent indentation", current > 0 ? startLocation | _reader : startLocation);
             }
+            else if (_state is IndenterState.Locking)
+            {
+                _levels.Push(current);
+                _state = IndenterState.Locked;
+
+                return;
+            }
 
             if (current > last)
             {
@@ -54,16 +62,7 @@ namespace BitPatch.DialogLang
                 var indentLocation = new Location(_reader.Source, startLocation.Line, last + 1, current + 1);
                 output.Enqueue(Token.Indent(indentLocation));
 
-                if (_state is IndenterState.NeedToLock)
-                {
-                    _state = IndenterState.Locked;
-                }
-
                 return;
-            }
-            else if (_state is IndenterState.NeedToLock)
-            {
-                throw new SyntaxError("Expecting indentation", _reader.GetLocation());
             }
 
             var count = 0;
@@ -83,12 +82,12 @@ namespace BitPatch.DialogLang
         }
 
         /// <summary>
-        /// Locks the indenter to enforce consistent indentation.
+        /// Starts the locking process to enforce consistent indentation.
         /// </summary>
-        public void Lock()
+        public void StartLocking()
         {
             Assert.IsTrue(_state is IndenterState.Default, $"Expected default state, current: {_state}.");
-            _state = IndenterState.NeedToLock;
+            _state = IndenterState.Locking;
         }
 
         /// <summary>
@@ -96,7 +95,19 @@ namespace BitPatch.DialogLang
         /// </summary>
         public void Unlock()
         {
-            Assert.IsTrue(_state is IndenterState.Locked or IndenterState.NeedToLock, $"Expected locking state, current: {_state}.");
+            switch (_state)
+            {
+                case IndenterState.Default:
+                    throw new InvalidOperationException("Cannot unlock when not locked.");
+                case IndenterState.Locking:        
+                    break;
+                case IndenterState.Locked:
+                    _levels.Pop();
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown indenter state: {_state}.");
+            }
+
             _state = IndenterState.Default;
         }
 

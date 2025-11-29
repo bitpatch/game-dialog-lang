@@ -399,11 +399,9 @@ namespace BitPatch.DialogLang
         /// </summary>
         private Ast.Expression ParsePrimary()
         {
-            var token = _current;
-
-            return token.Type switch
+            return _current.Type switch
             {
-                TokenType.StringStart => ParseString(token.Location),
+                TokenType.StringStart => ParseString(),
                 TokenType.LeftParen => ParseParenthesizedExpression(),
                 _ => ParsePrimitive()
             };
@@ -451,7 +449,7 @@ namespace BitPatch.DialogLang
         /// <summary>
         /// Parses an interpolated string.
         /// </summary>
-        private Ast.Expression ParseString(Location startLocation)
+        private Ast.Expression ParseString()
         {
             var openingQuote = Consume(TokenType.StringStart); // Expect opening quote
             var parts = new List<Ast.Expression>();
