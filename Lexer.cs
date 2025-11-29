@@ -352,7 +352,12 @@ namespace BitPatch.DialogLang
                     _state.Push(LexerState.ReadingMultiString);
                     _indenter.StartLocking();
                     _multistringQuotes = quotes;
-                    return new Token(TokenType.StringStart, new string('"', quotes), startLocation | _reader);
+                    var token = new Token(TokenType.StringStart, new string('"', quotes), startLocation | _reader);
+                    if (_reader.Peek() is '\n' or '\r' or '\u2028' or '\u2029' or '\u0085')
+                    {
+                        _reader.Read(); // Consume newline after opening multi-string
+                    }
+                    return token;
             }
         }
 
@@ -442,7 +447,7 @@ namespace BitPatch.DialogLang
             var startLocation = _reader.GetLocation();
             _stringBuilder.Clear();
 
-            while (_reader.CanRead() && !_reader.IsAtLineEnd())
+            while (_reader.CanRead())
             {
                 var peek = (char)_reader.Peek();
 
@@ -473,18 +478,18 @@ namespace BitPatch.DialogLang
                             _stringBuilder.Append(new string('"', quotes));
                         }
                         break;
+                    case '\n' or '\r' or '\u2028' or '\u2029' or '\u0085':
+                        _stringBuilder.Append('\n');
+                        _stringBuilder.ToToken(startLocation | _reader)?.EnqueueTo(buffer);
+                        _reader.Read(); // Consume newline
+                        return;
                     default:
                         _stringBuilder.Append(_reader.Read());
                         break;
                 }
             }
 
-            _stringBuilder.ToToken(startLocation | _reader.Column)?.EnqueueTo(buffer);
-
-            if (_reader.CanRead())
-            {
-                _reader.Read();
-            }
+            _stringBuilder.ToToken(startLocation | _reader)?.EnqueueTo(buffer);
         }
 
         /// <summary>

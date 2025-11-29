@@ -486,7 +486,11 @@ namespace BitPatch.DialogLang
                 return astString with { Location = openingQuote.Location + closingQuote.Location };
             }
 
-            return new Ast.String(parts, openingQuote.Location + closingQuote.Location);
+            var location = openingQuote.Location.Line == closingQuote.Location.Line
+                ? openingQuote.Location + closingQuote.Location
+                : openingQuote.Location;
+
+            return new Ast.String(parts, location);
         }
 
         /// <summary>

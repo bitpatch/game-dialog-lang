@@ -243,7 +243,7 @@ namespace BitPatch.DialogLang
                 throw new InvalidOperationException($"Cannot read indentation when not at the start of a line.");
             }
 
-            while (CanRead() && _line <= fixedIndent)
+            while (CanRead() && _column <= fixedIndent)
             {
                 var charValue = (char)Peek();
 
