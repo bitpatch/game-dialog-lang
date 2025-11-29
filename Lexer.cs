@@ -442,7 +442,7 @@ namespace BitPatch.DialogLang
             var startLocation = _reader.GetLocation();
             _stringBuilder.Clear();
 
-            while (_reader.CanRead())
+            while (_reader.CanRead() && !_reader.IsAtLineEnd())
             {
                 var peek = (char)_reader.Peek();
 
@@ -453,26 +453,17 @@ namespace BitPatch.DialogLang
                         _stringBuilder.Append(ReadEscapeCharacter());
                         break;
                     case '{':
-                        if (_stringBuilder.Length > 0)
-                        {
-                            var stringToken = new Token(TokenType.InlineString, _stringBuilder.ToString(), startLocation | _reader);
-                            buffer.Enqueue(stringToken);
-                        }
+                        _stringBuilder.ToToken(startLocation | _reader)?.EnqueueTo(buffer);
                         buffer.Enqueue(ReadSingleToken(TokenType.InlineExpressionStart, '{'));
                         _state.Push(LexerState.ReadingInlineExpression); // Switch to expression reading state
                         return;
                     case '"':
-                        var column  = _reader.Column;
+                        var quoteLocation = _reader.GetLocation();
                         var quotes = _reader.SkipAll('"');
                         if (quotes == _multistringQuotes)
                         {
-                            if (_stringBuilder.Length > 0)
-                            {
-                                var stringToken = new Token(TokenType.InlineString, _stringBuilder.ToString(), startLocation | column);
-                                buffer.Enqueue(stringToken);
-                            }
-                            var location = new Location(_reader.Source, startLocation.Line, column, _reader.Column);
-                            buffer.Enqueue(new Token(TokenType.StringEnd, new string('"', quotes), location));
+                            _stringBuilder.ToToken(startLocation | quoteLocation.Initial)?.EnqueueTo(buffer);
+                            buffer.Enqueue(new Token(TokenType.StringEnd, new string('"', quotes), quoteLocation | _reader));
                             _indenter.Unlock();
                             _state.Pop(); // Finish string readings
                             return;
@@ -482,21 +473,18 @@ namespace BitPatch.DialogLang
                             _stringBuilder.Append(new string('"', quotes));
                         }
                         break;
-                    case '\n' or '\r' or '\u2028' or '\u2029' or '\u0085' or '#':
-                        if (_stringBuilder.Length > 0)
-                        {
-                            var stringToken = new Token(TokenType.InlineString, _stringBuilder.ToString(), startLocation | _reader);
-                            buffer.Enqueue(stringToken);
-                        }
-                        _reader.Read(); // Consume newline or comment start
-                        return;
                     default:
                         _stringBuilder.Append(_reader.Read());
                         break;
                 }
             }
 
-            throw new SyntaxError("The string is not closed", _reader.GetLocation());
+            _stringBuilder.ToToken(startLocation | _reader.Column)?.EnqueueTo(buffer);
+
+            if (_reader.CanRead())
+            {
+                _reader.Read();
+            }
         }
 
         /// <summary>

@@ -90,9 +90,14 @@ namespace BitPatch.DialogLang
                 throw new ArgumentException($"Mismatched lines, location: {location.Line}, reader: {reader.Line}");
             }
 
-            if (reader.Column < location.Final)
+            if (reader.Column < location.Initial)
             {
                 throw new ArgumentException($"Final position too small, ({location}) | ({reader.Column})");
+            }
+            
+            if (location.Final >= reader.Column)
+            {
+                return location;
             }
 
             return new Location(location.Source, location.Line, location.Initial, reader.Column);
@@ -109,10 +114,15 @@ namespace BitPatch.DialogLang
         /// </returns>
         public static Location operator |(Location location, int final)
         {
-            if (final < location.Final)
+            if (final < location.Initial)
             {
                 throw new ArgumentException($"Final position too small, ({location}) | ({final})");
-            }   
+            }
+            
+            if (location.Final >= final)
+            {
+                return location;
+            }
 
             return new Location(location.Source, location.Line, location.Initial, final);
         }
