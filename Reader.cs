@@ -15,6 +15,16 @@ namespace BitPatch.DialogLang
         public Location Location => new(_source, _line, _column);
 
         /// <summary>
+        /// Gets the source being read.
+        /// </summary>
+        public Source Source => _source;
+
+        /// <summary>
+        /// Gets the current line number (1-based).
+        /// </summary>
+        public int Line => _line;
+
+        /// <summary>
         /// Gets the current column position (1-based).
         /// </summary>
         public int Column => _column;
@@ -226,7 +236,7 @@ namespace BitPatch.DialogLang
         /// <returns>The indentation level (number of spaces/tabs).</returns>
         /// <exception cref="InvalidOperationException">Thrown if not at the start of a line.</exception>
         /// <exception cref="SyntaxError">Thrown if mixed indentation styles are detected.</exception>
-        public int ReadIndentation(int fixedIndent = int.MaxValue)
+        public int ReadIndentLevel(int fixedIndent = int.MaxValue)
         {
             if (!IsAtLineStart())
             {

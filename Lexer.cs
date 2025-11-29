@@ -20,14 +20,9 @@ namespace BitPatch.DialogLang
         private readonly StringBuilder _stringBuilder = new();
 
         /// <summary>
-        /// Stack to keep track of indentation levels.
+        /// Determines the stack of lexer states.
         /// </summary>
-        private readonly Stack<int> _indents = new();
-
-        /// <summary>
-        /// The current lexer state.
-        /// </summary>
-        private LexerState _state = LexerState.Default;
+        private readonly StateStack _state = new();
 
         /// <summary>
         /// Buffer to hold tokens before yielding them.
@@ -35,14 +30,14 @@ namespace BitPatch.DialogLang
         private readonly Queue<Token> _buffer = new();
 
         /// <summary>
-        /// The current indentation mode.
-        /// </summary>
-        private IndentMode _indentMode = IndentMode.Default;
-
-        /// <summary>
         /// The number of quotes that started a multi-line string.
         /// </summary>
         private int _multistringQuotes = 0;
+
+        /// <summary>
+        /// The indenter for handling indentation tokens.
+        /// </summary>
+        private readonly Indenter _indenter;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Lexer"/> class.
@@ -50,7 +45,7 @@ namespace BitPatch.DialogLang
         public Lexer(Source source)
         {
             _reader = new Reader(source);
-            _indents.Push(0);
+            _indenter = new Indenter(_reader);
         }
 
         /// <summary>
@@ -70,17 +65,15 @@ namespace BitPatch.DialogLang
             {
                 if (_reader.IsAtLineStart())
                 {
-                    ReadIndentation(_buffer);
+                    _indenter.Read(_buffer);
 
                     while (_buffer.Count > 0)
                     {
                         yield return _buffer.Dequeue();
                     }
-
-                    _state = LexerState.Default;
                 }
 
-                switch (_state)
+                switch (_state.Peek)
                 {
                     case LexerState.Default:
                     case LexerState.ReadingInlineExpression:
@@ -93,6 +86,13 @@ namespace BitPatch.DialogLang
                     case LexerState.ReadingString:
                         yield return ReadString();
                         break;
+                    case LexerState.ReadingMultiString:
+                        ReadMultiString(_buffer);
+                        while (_buffer.Count > 0)
+                        {
+                            yield return _buffer.Dequeue();
+                        }
+                        break;
                     default:
                         throw new InvalidOperationException($"Unexpected lexer state: {_state}");
                 }
@@ -104,69 +104,13 @@ namespace BitPatch.DialogLang
             }
 
             // Generate Dedent tokens for all remaining indentation levels.
-            while (_indents.Count > 1)
+            _indenter.Empty(_buffer);
+            while (_buffer.Count > 0)
             {
-                _indents.Pop();
-                yield return Token.Dedent(_reader.GetLocation());
+                yield return _buffer.Dequeue();
             }
 
             yield return new Token(TokenType.EndOfSource, string.Empty, _reader.GetLocation());
-        }
-
-        /// <summary>
-        /// Reads the indentation level and returns Indent/Dedent tokens as needed.
-        /// </summary>
-        /// <param name="buffer">The buffer to hold tokens.</param>
-        /// <returns>A tuple containing the token type and the count of tokens to emit.</returns>
-        private void ReadIndentation(Queue<Token> buffer)
-        {
-            AssertIndentMode(IndentMode.Default);
-            var currentLevel = _indents.Peek();
-            int identLevel = _indentMode is IndentMode.Fixed ? _reader.ReadIndentation(currentLevel) : _reader.ReadIndentation();
-
-            if (_indentMode is IndentMode.Fixed && identLevel != currentLevel)
-            {
-                throw new SyntaxError("Inconsistent indentation", _reader.GetLocation());
-            }
-
-            if (identLevel > currentLevel)
-            {
-                _indents.Push(identLevel);
-                buffer.Enqueue(Token.Indent(_reader.GetLocation()));
-
-                if (_indentMode is IndentMode.NeenToFix)
-                {
-                    _indentMode = IndentMode.Fixed;
-                }
-
-                return;
-            }
-            else if (_indentMode is IndentMode.NeenToFix)
-            {
-                throw new SyntaxError("Expecting indentation", _reader.GetLocation());
-            }
-
-            var count = 0;
-
-            while (identLevel < currentLevel)
-            {
-                _indents.Pop();
-                currentLevel = _indents.Peek();
-                count++;
-            }
-
-            if (identLevel != currentLevel)
-            {
-                throw new SyntaxError("Inconsistent indentation", _reader.GetLocation());
-            }
-
-            if (count > 0 && _reader.CanRead())
-            {
-                for (int i = 0; i < count; i++)
-                {
-                    buffer.Enqueue(Token.Dedent(_reader.GetLocation()));
-                }
-            }
         }
 
         /// <summary>
@@ -182,8 +126,8 @@ namespace BitPatch.DialogLang
                 '#' or '\n' or '\r' or '\u2028' or '\u2029' or '\u0085' => ReadNewline(),
 
                 // String literal
-                '"' when _state is LexerState.Default => StartString(),
-                '"' when _state is LexerState.ReadingInlineExpression => ReadInlineString(),
+                '"' when _state.Peek is LexerState.Default => StartString(),
+                '"' when _state.Peek is LexerState.ReadingInlineExpression => ReadInlineString(),
 
                 // Integer number
                 >= '0' and <= '9' => ReadNumber(),
@@ -209,8 +153,8 @@ namespace BitPatch.DialogLang
                 ')' => ReadSingleToken(TokenType.RightParen, ')'),
 
                 // Expression braces
-                '{' when _state is LexerState.ReadingInlineExpression => throw new SyntaxError("Nested '{' in expression is not allowed", _reader.GetLocation()),
-                '}' when _state is LexerState.ReadingInlineExpression => FinishExpression(),
+                '{' when _state.Peek is LexerState.ReadingInlineExpression => throw new SyntaxError("Nested '{' in expression is not allowed", _reader.GetLocation()),
+                '}' when _state.Peek is LexerState.ReadingInlineExpression => FinishExpression(),
 
                 // Unknown character
                 _ => throw new SyntaxError("Unexpected symbol", _reader.GetLocation()),
@@ -223,7 +167,7 @@ namespace BitPatch.DialogLang
         private Token FinishExpression()
         {
             AssertState(LexerState.ReadingInlineExpression, "Cannot finish expression");
-            _state = LexerState.ReadingString;
+            _state.Pop();
 
             return ReadSingleToken(TokenType.InlineExpressionEnd, '}');
         }
@@ -236,7 +180,7 @@ namespace BitPatch.DialogLang
             var startLocation = _reader.GetLocation();
 
             _reader.Skip('<'); // Consume first '<'
-            
+
             switch (_reader.Peek())
             {
                 case '<':
@@ -398,15 +342,15 @@ namespace BitPatch.DialogLang
             {
                 case 1:
                     // Single quote starts a one-line string.
-                    _state = LexerState.ReadingString;
+                    _state.Push(LexerState.ReadingString);
                     return new Token(TokenType.StringStart, "\"", startLocation);
                 case 2:
                     // Double quotes represent an empty string.
                     return new Token(TokenType.InlineString, string.Empty, startLocation | _reader);
                 default:
                     // Triple quotes and more start a multi-line string.
-                    _state = LexerState.ReadingMultiString;
-                    _indentMode = IndentMode.NeenToFix;
+                    _state.Push(LexerState.ReadingMultiString);
+                    _indenter.Lock();
                     _multistringQuotes = quotes;
                     return new Token(TokenType.StringStart, new string('"', quotes), startLocation | _reader);
             }
@@ -477,11 +421,74 @@ namespace BitPatch.DialogLang
                         // Return the accumulated string before handling special character.
                         return new Token(TokenType.InlineString, _stringBuilder.ToString(), startLocation | _reader);
                     case '{' when _stringBuilder.Length is 0:
-                        _state = LexerState.ReadingInlineExpression; // Switch to expression reading state
+                        _state.Push(LexerState.ReadingInlineExpression); // Switch to expression reading state
                         return ReadSingleToken(TokenType.InlineExpressionStart, '{');
                     case '"' when _stringBuilder.Length is 0:
-                        _state = LexerState.Default; // Finish string readings
+                        _state.Pop(); // Finish string readings
                         return ReadSingleToken(TokenType.StringEnd, '"');
+                    default:
+                        _stringBuilder.Append(_reader.Read());
+                        break;
+                }
+            }
+
+            throw new SyntaxError("The string is not closed", _reader.GetLocation());
+        }
+
+        private void ReadMultiString(Queue<Token> buffer)
+        {
+            AssertState(LexerState.ReadingMultiString, "Cannot read string");
+
+            var startLocation = _reader.GetLocation();
+            _stringBuilder.Clear();
+
+            while (_reader.CanRead())
+            {
+                var peek = (char)_reader.Peek();
+
+                switch (peek)
+                {
+                    case '\\':
+                        _reader.Read(); // Consume '\'
+                        _stringBuilder.Append(ReadEscapeCharacter());
+                        break;
+                    case '{':
+                        if (_stringBuilder.Length > 0)
+                        {
+                            var stringToken = new Token(TokenType.InlineString, _stringBuilder.ToString(), startLocation | _reader);
+                            buffer.Enqueue(stringToken);
+                        }
+                        buffer.Enqueue(ReadSingleToken(TokenType.InlineExpressionStart, '{'));
+                        _state.Push(LexerState.ReadingInlineExpression); // Switch to expression reading state
+                        return;
+                    case '"':
+                        _indenter.Unlock();
+                        var column  = _reader.Column;
+                        var quotes = _reader.SkipAll('"');
+                        if (quotes == _multistringQuotes)
+                        {
+                            if (_stringBuilder.Length > 0)
+                            {
+                                var stringToken = new Token(TokenType.InlineString, _stringBuilder.ToString(), startLocation | column);
+                                buffer.Enqueue(stringToken);
+                            }
+                            buffer.Enqueue(new Token(TokenType.StringEnd, new string('"', quotes), column | _reader.GetLocation()));
+                            _state.Pop(); // Finish string readings
+                            return;
+                        }
+                        else
+                        {
+                            _stringBuilder.Append(new string('"', quotes));
+                        }
+                        break;
+                    case '\n' or '\r' or '\u2028' or '\u2029' or '\u0085' or '#':
+                        if (_stringBuilder.Length > 0)
+                        {
+                            var stringToken = new Token(TokenType.InlineString, _stringBuilder.ToString(), startLocation | _reader);
+                            buffer.Enqueue(stringToken);
+                        }
+                        _reader.Read(); // Consume newline or comment start
+                        return;
                     default:
                         _stringBuilder.Append(_reader.Read());
                         break;
@@ -498,14 +505,14 @@ namespace BitPatch.DialogLang
         {
             var startLocation = _reader.GetLocation();
             _reader.Skip('\\'); // Consume '\'
-            
+
             if (!_reader.IsAtLineEnd())
             {
                 throw new SyntaxError("The string is not closed", _reader.GetLocation());
             }
 
             var charValue = _reader.Read();
-            
+
             var escapeChar = charValue switch
             {
                 'n' => '\n',
@@ -544,9 +551,9 @@ namespace BitPatch.DialogLang
         /// <exception cref="InvalidOperationException">Thrown if the lexer state does not match the expected state.</exception>
         private void AssertState(LexerState expected, string message)
         {
-            if (_state != expected)
+            if (_state.Peek != expected)
             {
-                throw new InvalidOperationException($"{message}, state is '{_state}'");
+                throw new InvalidOperationException($"{message}, state is '{_state.Peek}'");
             }
         }
 
@@ -559,17 +566,9 @@ namespace BitPatch.DialogLang
         /// <exception cref="InvalidOperationException">Thrown if the lexer state does not match either of the expected states.</exception>s]
         private void AssertStates(LexerState expected1, LexerState expected2, string message)
         {
-            if (_state != expected1 && _state != expected2)
+            if (_state.Peek != expected1 && _state.Peek != expected2)
             {
-                throw new InvalidOperationException($"{message}, state is '{_state}'");
-            }
-        }
-
-        void AssertIndentMode(IndentMode expected)
-        {
-            if (_indentMode != expected)
-            {
-                throw new InvalidOperationException($"Expected indent mode '{expected}', but current mode is '{_indentMode}'");
+                throw new InvalidOperationException($"{message}, state is '{_state.Peek}'");
             }
         }
     }
