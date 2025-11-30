@@ -41,7 +41,7 @@ namespace BitPatch.DialogLang
         {
             if (final <= initial)
             {
-                throw new ArgumentOutOfRangeException(nameof(final), "Final position must be greater than initial position.");
+                throw new ArgumentException("Final position must be greater than initial position.");
             }
 
             Source = source;
@@ -54,38 +54,74 @@ namespace BitPatch.DialogLang
         /// Combines two locations into a single range spanning from the start of the first to the end of the second.
         /// </summary>
         /// <exception cref="InvalidOperationException">Thrown when the sources or lines of the two locations differ.</exception>
-        public static Location operator |(Location left, Location right)
+        public static Location operator +(Location left, Location right)
         {
             if (left.Source != right.Source)
             {
-                throw new ArgumentException($"Cannot combine locations from different sources. Left source: {left.Source}], Right source: {right.Source}");
+                throw new ArgumentException($"Mismatched sources. Left source: {left.Source}, Right source: {right.Source}");
             }
 
             if (left.Line != right.Line)
             {
-                throw new ArgumentException($"Cannot combine locations from different lines. Left line: {left.Line}, Right line: {right.Line}");
-            }
-
-            if (left.Initial > right.Final)
-            {
-                throw new ArgumentException($"Left location must start before right one. Left initial: {left.Initial}, Right final: {right.Final}");
+                throw new ArgumentException($"Mismatched lines. Left line: {left.Line}, Right line: {right.Line}");
             }
 
             return new Location(left.Source, left.Line, left.Initial, right.Final);
         }
 
         /// <summary>
-        /// Extends the location to a new final position on the same line and source.
+        /// Extends the location to a new final position based on the current position of the reader.
         /// </summary>
         /// <param name="location">The base location.</param>
-        /// <param name="final">The final position of the new location range (must be greater than initial).</param>
-        /// <returns>A new location starting at <c>Initial</c> and ending at <c>final</c> on the same line and source.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="final"/> is less than or equal to <c>Initial</c>.</exception>
+        /// <param name="reader">The reader providing the current position.</param>
+        /// <returns>
+        /// A new location starting at <c>Initial</c> and ending at the reader's current
+        /// column on the same line and source.
+        /// </returns>
+        public static Location operator |(Location location, Reader reader)
+        {
+            if (reader.Source != location.Source)
+            {
+                throw new ArgumentException($"Mismatched sources, location: {location.Source}, reader: {reader.Source}");
+            }
+
+            if (reader.Line != location.Line)
+            {
+                throw new ArgumentException($"Mismatched lines, location: {location.Line}, reader: {reader.Line}");
+            }
+
+            if (reader.Column < location.Initial)
+            {
+                throw new ArgumentException($"Final position too small, ({location}) | ({reader.Column})");
+            }
+            
+            if (location.Final >= reader.Column)
+            {
+                return location;
+            }
+
+            return new Location(location.Source, location.Line, location.Initial, reader.Column);
+        }
+
+        /// <summary>
+        /// Extends the location to a new final position.
+        /// </summary>
+        /// <param name="location">The base location.</param>
+        /// <param name="final">The new final position.</param>
+        /// <returns>
+        /// A new location starting at <c>Initial</c> and ending at the specified final position
+        /// on the same line and source.
+        /// </returns>
         public static Location operator |(Location location, int final)
         {
-            if (final < location.Final)
+            if (final < location.Initial)
             {
-                throw new ArgumentOutOfRangeException(nameof(final), "Final position cannot be less than current final position.");
+                throw new ArgumentException($"Final position too small, ({location}) | ({final})");
+            }
+            
+            if (location.Final >= final)
+            {
+                return location;
             }
 
             return new Location(location.Source, location.Line, location.Initial, final);

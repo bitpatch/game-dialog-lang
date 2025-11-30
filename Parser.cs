@@ -75,7 +75,7 @@ namespace BitPatch.DialogLang
             var expression = ParseExpression();
             Consume(TokenType.Newline); // expect end of statement
 
-            return new Ast.Assign(identifier, expression, startLocation | expression.Location);
+            return new Ast.Assign(identifier, expression, startLocation + expression.Location);
         }
 
         /// <summary>
@@ -89,7 +89,7 @@ namespace BitPatch.DialogLang
             var expression = ParseExpression();
             Consume(TokenType.Newline); // expect end of statement
 
-            return new Ast.Output(expression, startLocation | expression.Location);
+            return new Ast.Output(expression, startLocation + expression.Location);
         }
 
         /// <summary>
@@ -144,7 +144,7 @@ namespace BitPatch.DialogLang
 
             var body = ParseBlock();
 
-            return new Ast.While(condition, body, startLocation | condition.Location);
+            return new Ast.While(condition, body, startLocation + condition.Location);
         }
 
         /// <summary>
@@ -186,7 +186,7 @@ namespace BitPatch.DialogLang
                 elseBlock = ParseBlock();
             }
 
-            return new Ast.If(ifBranch, elseIfBranches, elseBlock, startLocation | ifBranch.Location);
+            return new Ast.If(ifBranch, elseIfBranches, elseBlock, startLocation + ifBranch.Location);
         }
 
         /// <summary>
@@ -207,7 +207,7 @@ namespace BitPatch.DialogLang
             }
 
             var thenBlock = ParseBlock();
-            return new Ast.ConditionalBlock(condition, thenBlock, startLocation | condition.Location);
+            return new Ast.ConditionalBlock(condition, thenBlock, startLocation + condition.Location);
         }
 
         /// <summary>
@@ -241,7 +241,7 @@ namespace BitPatch.DialogLang
             {
                 MoveNext(); // consume 'or'
                 var right = ParseXorExpression();
-                left = new Ast.OrOp(left, right, left.Location | right.Location);
+                left = new Ast.OrOp(left, right, left.Location + right.Location);
             }
 
             return left;
@@ -258,7 +258,7 @@ namespace BitPatch.DialogLang
             {
                 MoveNext(); // consume 'xor'
                 var right = ParseAndExpression();
-                left = new Ast.XorOp(left, right, left.Location | right.Location);
+                left = new Ast.XorOp(left, right, left.Location + right.Location);
             }
 
             return left;
@@ -275,7 +275,7 @@ namespace BitPatch.DialogLang
             {
                 MoveNext(); // consume 'and'
                 var right = ParseComparisonExpression();
-                left = new Ast.AndOp(left, right, left.Location | right.Location);
+                left = new Ast.AndOp(left, right, left.Location + right.Location);
             }
 
             return left;
@@ -294,7 +294,7 @@ namespace BitPatch.DialogLang
                 var opType = _current.Type;
                 MoveNext(); // Consume comparison operator
                 var right = ParseNotExpression();
-                var position = left.Location | right.Location;
+                var position = left.Location + right.Location;
 
                 left = opType switch
                 {
@@ -323,7 +323,7 @@ namespace BitPatch.DialogLang
                 var opType = _current.Type;
                 MoveNext(); // consume operator
                 var right = ParseMultiplicativeExpression();
-                var location = left.Location | right.Location;
+                var location = left.Location + right.Location;
 
                 left = opType switch
                 {
@@ -348,7 +348,7 @@ namespace BitPatch.DialogLang
                 var opType = _current.Type;
                 MoveNext(); // consume operator
                 var right = ParseUnaryExpression();
-                var location = left.Location | right.Location;
+                var location = left.Location + right.Location;
 
                 left = opType switch
                 {
@@ -372,7 +372,7 @@ namespace BitPatch.DialogLang
                 var startLocation = _current.Location;
                 MoveNext(); // consume '-'
                 var operand = ParseUnaryExpression(); // right-associative
-                return new Ast.NegateOp(operand, startLocation | operand.Location);
+                return new Ast.NegateOp(operand, startLocation + operand.Location);
             }
 
             return ParsePrimary();
@@ -388,7 +388,7 @@ namespace BitPatch.DialogLang
                 var startLocation = _current.Location;
                 MoveNext(); // consume 'not'
                 var operand = ParseNotExpression(); // right-associative
-                return new Ast.NotOp(operand, startLocation | operand.Location);
+                return new Ast.NotOp(operand, startLocation + operand.Location);
             }
 
             return ParseAdditiveExpression();
@@ -399,11 +399,9 @@ namespace BitPatch.DialogLang
         /// </summary>
         private Ast.Expression ParsePrimary()
         {
-            var token = _current;
-
-            return token.Type switch
+            return _current.Type switch
             {
-                TokenType.StringStart => ParseString(token.Location),
+                TokenType.StringStart => ParseString(),
                 TokenType.LeftParen => ParseParenthesizedExpression(),
                 _ => ParsePrimitive()
             };
@@ -445,13 +443,13 @@ namespace BitPatch.DialogLang
             }
 
             var rightParen = Consume(TokenType.RightParen); // Expect ')'
-            return expression with { Location = leftParen.Location | rightParen.Location };
+            return expression with { Location = leftParen.Location + rightParen.Location };
         }
 
         /// <summary>
         /// Parses an interpolated string.
         /// </summary>
-        private Ast.Expression ParseString(Location startLocation)
+        private Ast.Expression ParseString()
         {
             var openingQuote = Consume(TokenType.StringStart); // Expect opening quote
             var parts = new List<Ast.Expression>();
@@ -479,16 +477,25 @@ namespace BitPatch.DialogLang
             // If no parts at all, return empty string.
             if (parts.Count is 0)
             {
-                return new Ast.InlineString(string.Empty, openingQuote.Location | closingQuote.Location);
+                return new Ast.InlineString(string.Empty, openingQuote.Location + closingQuote.Location);
             }
 
             // If only one part and it's a string, return it directly (optimization).
             if (parts.Count is 1 && parts[0] is Ast.InlineString astString)
             {
-                return astString with { Location = openingQuote.Location | closingQuote.Location };
+                return astString with
+                {
+                    Location = openingQuote.Location.Line == closingQuote.Location.Line
+                        ? openingQuote.Location + closingQuote.Location
+                        : openingQuote.Location
+                };
             }
 
-            return new Ast.String(parts, openingQuote.Location | closingQuote.Location);
+            var location = openingQuote.Location.Line == closingQuote.Location.Line
+                ? openingQuote.Location + closingQuote.Location
+                : openingQuote.Location;
+
+            return new Ast.String(parts, location);
         }
 
         /// <summary>

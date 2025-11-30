@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 
 namespace BitPatch.DialogLang
 {
@@ -61,6 +62,35 @@ namespace BitPatch.DialogLang
             {
                 loops.Pop();
             }
+        }
+
+        /// <summary>
+        /// Converts the contents of the StringBuilder to a Token and clears the builder.
+        /// Returns null if the builder is empty.
+        /// </summary>
+        /// <param name="builder">The StringBuilder to convert.</param>
+        /// <param name="location">The location of the token in the source code.</param>
+        /// <returns>The created Token, or null if the builder is empty.</returns>
+        public static Token? ToToken(this StringBuilder builder, Location location)
+        {
+            if (builder.Length is 0)
+            {
+                return null;
+            }
+
+            var token = new Token(TokenType.InlineString, builder.ToString(), location);
+            builder.Clear();
+            return token;
+        }
+
+        /// <summary>
+        /// Enqueues the token to the given queue.
+        /// </summary>
+        /// <param name="token">The token to enqueue.</param>
+        /// <param name="queue">The queue to enqueue the token to.</param>
+        public static void EnqueueTo(this Token token, Queue<Token> queue)
+        {
+            queue.Enqueue(token);
         }
     }
 }
